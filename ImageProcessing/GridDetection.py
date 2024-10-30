@@ -52,7 +52,7 @@ def merge_similar_lines(lines, img_shape):
             angle_diff = abs(np.arctan2(y2 - y1, x2 - x1) - np.arctan2(my2 - my1, mx2 - mx1))
 
             # If distance and angle difference is small, merge the lines
-            if (dist1 < 20 and dist2 < 20 and angle_diff < np.pi / 36):  # Adjust tolerance for distance and angle
+            if (dist1 < 25 and dist2 < 25 and angle_diff < np.pi / 36):  # Adjust tolerance for distance and angle
                 # Average the points to merge the lines
                 merged_line[0] = (x1 + mx1) // 2
                 merged_line[1] = (y1 + my1) // 2
@@ -68,7 +68,7 @@ def merge_similar_lines(lines, img_shape):
 
 
 # Load the image
-img = cv2.imread('grid.png')
+img = cv2.imread('drawnGrid.jpeg')
 
 # Convert the image to grayscale
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -92,7 +92,8 @@ if lines is not None:
         cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
 # Display the original image with detected grid lines (optional)
-cv2.imshow('Detected Grid Lines', img)
+imgR = cv2.resize(img, (0, 0), fx = 0.7, fy = 0.7)
+cv2.imshow('Detected Grid Lines', imgR)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
