@@ -31,7 +31,7 @@ import cv2
 import numpy as np
 
 # Load the image
-img = cv2.imread('grid.png')
+img = cv2.imread('BlockPaper.jpeg')
 
 # Convert the image to HSV color space
 hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -52,13 +52,14 @@ for contour in contours:
     # Calculate the position of the detected color
     x, y, w, h = cv2.boundingRect(contour)
     # You can draw a rectangle around the detected color (optional)
-    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 10)
     # Print out or store the position
     print(f'blue found at position: x={x}, y={y}, width={w}, height={h}')
 
 
 # Show the result (optional)
-cv2.imshow('Detected Color', img)
+imgR = cv2.resize(img, (0, 0), fx = 0.5, fy = 0.3)
+cv2.imshow('Detected Color', imgR)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
 
