@@ -3,9 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+imageName = "grid.png"
 
 # read image and convert to greyscale
-image = cv2.imread("drawnGrid2.JPG")
+image = cv2.imread(imageName)
 
 greyImage = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -27,7 +28,8 @@ plt.imshow(gaussian_blur,cmap="gray")
 
 
 # OTSU Threshold -  creates binary image
-ret,otsu_binary = cv2.threshold(gaussian_blur,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+customThreshold = 50
+ret,otsu_binary = cv2.threshold(gaussian_blur,customThreshold,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 plt.imshow(otsu_binary,cmap="gray")
 plt.show()
 
@@ -73,7 +75,7 @@ square_centers = list()
 board_squared = canny.copy()
 
 for contour in board_contours:
-    if 4000 < cv2.contourArea(contour) < 80000: #adjust these regarding grid and image size
+    if 20000 < cv2.contourArea(contour) < 80000: #adjust these regarding grid and image size
         # Approximate the contour to a simpler shape
         epsilon = 0.02 * cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, epsilon, True)
@@ -135,24 +137,6 @@ sorted_coordinates = [coord for group in groups for coord in group]
 
 print(sorted_coordinates[:10])
 
-
-
-# fill undetected squares
-
-# for num in range(len(sorted_coordinates) - 1):
-#     if abs(sorted_coordinates[num][1] - sorted_coordinates[num + 1][1]) < 50:
-#         if sorted_coordinates[num + 1][0] - sorted_coordinates[num][0] > 150:
-#             x = (sorted_coordinates[num + 1][0] + sorted_coordinates[num][0]) / 2
-#             y = (sorted_coordinates[num + 1][1] + sorted_coordinates[num][1]) / 2
-#             p1 = sorted_coordinates[num + 1][5]
-#             p2 = sorted_coordinates[num + 1][4]
-#             p3 = sorted_coordinates[num][3]
-#             p4 = sorted_coordinates[num][2]
-#             sorted_coordinates.insert(num + 1, [x, y, p1, p2, p3, p4])
-
-
-
-
 # show grid with numbers
 square_num=1
 for cor in sorted_coordinates:
@@ -164,34 +148,42 @@ plt.imshow(board_squared,cmap="gray")
 plt.show()
 
 
-#find pos of colours
+# find pos of colours /////////////////////////////////////////////////////////////////////////////////////////////////
 
-hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+# Load the image
+img = cv2.imread(imageName)
 
-lower_blue = np.array([100, 150, 50])
-upper_blue = np.array([140, 255, 255])
-# Example of striding through the HSV image every 2 pixels
-stride = 25  # Change this value to increase the step size
-subsampled_hsv = hsv[::stride, ::stride]  # Select every 'stride' pixel in both directions
+# Convert the image to HSV color space
+hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-# Apply the mask to the subsampled image
-mask = cv2.inRange(subsampled_hsv, lower_blue, upper_blue)
+# Define the range for the color you want to detect (in this case, blue)
+# You can adjust the range depending on the color you're interested in
+lower_blue = np.array([100, 150, 50])  # Lower bound of blue in HSV
+upper_blue = np.array([140, 255, 255])  # Upper bound of blue in HSV
 
-# Optionally, resize the mask back to the original size
-mask = cv2.resize(mask, (hsv.shape[1], hsv.shape[0]), interpolation=cv2.INTER_NEAREST)
+# Create a mask that isolates the blue color
+mask = cv2.inRange(hsv, lower_blue, upper_blue)
+
+# Find contours in the mask (or non-zero points)
 contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-
+# Loop through the contours to detect positions
 for contour in contours:
     # Calculate the position of the detected color
     x, y, w, h = cv2.boundingRect(contour)
     # You can draw a rectangle around the detected color (optional)
-    cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 10)
+    cv2.rectangle(img, (x, y), (x+w, y+h), (0, 255, 0), 10)
     # Print out or store the position
     print(f'blue found at position: x={x}, y={y}, width={w}, height={h}')
 
 
 # Show the result (optional)
+imgR = cv2.resize(img, (0, 0), fx = 0.5, fy = 0.3)
+cv2.imshow('Detected Color', imgR)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+
 imgR = cv2.resize(image, (0, 0), fx = 0.3, fy = 0.3)
 cv2.imshow('Detected Color', imgR)
 cv2.waitKey(0)
