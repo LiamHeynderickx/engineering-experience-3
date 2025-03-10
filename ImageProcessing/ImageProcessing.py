@@ -8,6 +8,10 @@ image = cv2.imread(imageName)
 
 ##need to make code more robust and check for conditions.
 
+##show OG pic
+cv2.imshow("Board State", image)
+cv2.waitKey(2000)  #shows image briefly
+
 ####################### DETECT GRID AREA AND CREATE GRID #######################
 
 # Convert to HSV
@@ -27,6 +31,10 @@ mask1 = cv2.inRange(hsv, lower_red_1, upper_red_1)
 mask2 = cv2.inRange(hsv, lower_red_2, upper_red_2)
 mask = cv2.bitwise_or(mask1, mask2) #OR combines masks
 contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #finds boundaries of regions in mask
+
+#purely visual:
+cv2.imshow("Board State", mask)
+cv2.waitKey(2000)  #shows image briefly
 
 #get central coordinates of red regions, these will be used as corners of the grid.
 coordinates = []
@@ -60,7 +68,8 @@ cell_size = width // 10
 #create 2D grid array with actual coordinates of the grid (used later to map where the boats are)
 grid = [[(col * cell_size, row * cell_size) for col in range(10)] for row in range(10)]
 
-
+cv2.imshow("Board State", warped) #purely visualisation
+cv2.waitKey(2000)  #shows image briefly
 
 ####################### DETECT GRID AREA AND CREATE GRID #######################
 
@@ -79,6 +88,10 @@ boat_contours, _ = cv2.findContours(green_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APP
 
 if not boat_contours:
     print("No green boats detected!")
+
+#purely visual:
+cv2.imshow("Board State", green_mask)
+cv2.waitKey(2000)  #shows image briefly
 
 #now we have a mask that has 'highlighted' the green boats we need to determine the position and what grid it falls into
 
