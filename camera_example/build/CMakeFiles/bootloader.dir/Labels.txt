@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/sodir/Documents/EE3/camera_example/build/CMakeFiles/bootloader
+/home/sodir/Documents/EE3/camera_example/build/CMakeFiles/bootloader.rule
+/home/sodir/Documents/EE3/camera_example/build/CMakeFiles/bootloader-complete.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/sodir/Documents/EE3/camera_example/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
