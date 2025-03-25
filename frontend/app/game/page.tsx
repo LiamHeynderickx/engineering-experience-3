@@ -7,6 +7,7 @@ import {
   generateNextMove,
 } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
+import { updateLEDsAfterTurn } from "../../actions/connectionTCP";
 
 const GRID_SIZE = 10;
 // For standard battleship, the total occupied squares are 5+4+3+3+2 = 17.
@@ -130,6 +131,9 @@ const GamePage = () => {
       setBotGrid(newGrid);
     }
 
+    // Update LEDs after the human's turn
+    updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);  // Call LED update here
+
     // End human turn, then trigger bot turn after delay.
     setIsHumanTurn(false);
     setTimeout(() => {
@@ -163,6 +167,7 @@ const GamePage = () => {
             newProbMisses[nextRow][nextCol] = 1;
             setBoardProbMisses(newProbMisses);
           }
+          
         } else if (difficulty === "hard") {
           // Hard difficulty: use the probability strategy but if a hit occurs,
           // then destroy the entire boat (all cells with the same boat id) in one turn.
@@ -213,6 +218,7 @@ const GamePage = () => {
             newProbMisses[nextRow][nextCol] = 1;
             setBoardProbMisses(newProbMisses);
           }
+          
         } else {
           // Easy and hard (if not using probability) fallback to previous bot strategy.
           const updatedQueue = easyBotTurn(
@@ -233,6 +239,7 @@ const GamePage = () => {
           setBotQueue([...updatedQueue]);
         }
         console.log("Bot turn completed.");
+        updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);  // Call LED update after the bot's turn as well
         setIsHumanTurn(true);
       }
     }, 1000);
