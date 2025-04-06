@@ -1,51 +1,46 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { generateBoard } from "../../actions/functions";
-import { botTurn as easyBotTurn } from "../../actions/functions"; // the existing easy bot strategy
-import {
-  generateProbabilitiesForAllShips,
-  generateNextMove,
-} from "../../actions/probability";
+import { botTurn as easyBotTurn } from "../../actions/functions";
+import { generateProbabilitiesForAllShips, generateNextMove } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
 import { updateLEDsAfterTurn } from "../../actions/connectionTCP";
 
 const GRID_SIZE = 10;
-// For standard battleship, the total occupied squares are 5+4+3+3+2 = 17.
 const TOTAL_SHIP_SQUARES = 17;
 
 const GamePage = () => {
-  const [difficulty, setDifficulty] = useState<
-    "easy" | "medium" | "hard" | null
-  >(null);
+  // Game control states
+  const [gameStarted, setGameStarted] = useState(false);
+  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard" | null>(null);
 
-  // Display grid for the bot's board (what the human attacks)
+  // Image capture states
+  const [cameraImage, setCameraImage] = useState<string | null>(null);
+  const [imageConfirmed, setImageConfirmed] = useState(false);
+  const [useTestImage, setUseTestImage] = useState(false); // New flag for test mode
+
+  // Game boards & display
   const [botGrid, setBotGrid] = useState<string[][]>(
-    Array(GRID_SIZE)
-      .fill(null)
-      .map(() => Array(GRID_SIZE).fill("blue"))
+    Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill("blue"))
   );
-
-  // Underlying boards
-  // For the human board (the one the bot attacks), if hard is selected, we generate with unique boat IDs.
   const [botBoard, setBotBoard] = useState<(number | string)[][]>([]);
   const [humanBoard, setHumanBoard] = useState<(number | string)[][]>([]);
 
-  // Hit counters
+  // Counters & turn management
   const [humanHits, setHumanHits] = useState(0);
   const [botHits, setBotHits] = useState(0);
-
-  // Turn control
   const [isHumanTurn, setIsHumanTurn] = useState(true);
+  const [gameOver, setGameOver] = useState(false);
+  const [winner, setWinner] = useState<"human" | "bot" | null>(null);
 
-  // Attacked squares sets
-  const [botAttacked, setBotAttacked] = useState<Set<string>>(new Set()); // squares attacked by human on bot board
-  const [humanAttacked, setHumanAttacked] = useState<Set<string>>(new Set()); // squares attacked by bot on human board
+  // Attacked cells
+  const [botAttacked, setBotAttacked] = useState<Set<string>>(new Set()); //this set contains the human move list: botAttacked = the tiles on the bot board ATTACKED
+  const [humanAttacked, setHumanAttacked] = useState<Set<string>>(new Set());
 
-  // For the easy bot (or chain-based logic) we have a queue.
+  // For easy bot queue
   const [botQueue, setBotQueue] = useState<{ x: number; y: number }[]>([]);
 
-  // For the probability-based strategy (used for medium and hard), we maintain two 10×10 matrices:
-  // boardProbHits: a hit is represented as 1; boardProbMisses: a miss is marked (say, as 1).
+  // For probability strategies (medium and hard)
   const [boardProbHits, setBoardProbHits] = useState<number[][]>(
     createMatrix(GRID_SIZE, GRID_SIZE, 0)
   );
@@ -53,30 +48,40 @@ const GamePage = () => {
     createMatrix(GRID_SIZE, GRID_SIZE, 0)
   );
 
-  // Game over state
-  const [gameOver, setGameOver] = useState(false);
-  const [winner, setWinner] = useState<"human" | "bot" | null>(null);
-
-  // On difficulty selection (or Play Again), generate boards and reset state.
+  // When difficulty is selected, initialize boards and reset state.
   useEffect(() => {
     if (difficulty) {
-      // For hard difficulty, generate boards with unique boat IDs.
       const useHard = difficulty === "hard";
       const bot = generateBoard(useHard);
-      const human = generateBoard(useHard);
       setBotBoard(bot);
-      setHumanBoard(human);
-
+      // For the human board, try to fetch from the API.
+      fetch("/api/boardData")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.board) {
+            setHumanBoard(data.board);
+            console.log("Fetched Human Board:", data.board);
+          } else {
+            // Fallback to random generation.
+            const human = generateBoard(useHard);
+            setHumanBoard(human);
+            console.log("Fallback Generated Human Board:", human);
+          }
+        })
+        .catch((err) => {
+          console.error("Error fetching human board:", err);
+          const human = generateBoard(useHard);
+          setHumanBoard(human);
+          console.log("Fallback Generated Human Board:", human);
+        });
+  
       // Reset displayed grid
       setBotGrid(
-        Array(GRID_SIZE)
-          .fill(null)
-          .map(() => Array(GRID_SIZE).fill("blue"))
+        Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill("blue"))
       );
-
+  
       console.log("Generated Bot Board:", bot);
-      console.log("Generated Human Board:", human);
-
+  
       // Reset counters and state.
       setHumanHits(0);
       setBotHits(0);
@@ -86,14 +91,34 @@ const GamePage = () => {
       setIsHumanTurn(true);
       setGameOver(false);
       setWinner(null);
-
-      // For probability bot matrices.
       setBoardProbHits(createMatrix(GRID_SIZE, GRID_SIZE, 0));
       setBoardProbMisses(createMatrix(GRID_SIZE, GRID_SIZE, 0));
     }
-  }, [difficulty]);
+  }, [difficulty, cameraImage]);
+  
+  // Capture image function.
+  // If test mode is enabled, simply return a test image URL from public folder.
+  const captureImage = async (): Promise<string | null> => {
+    if (useTestImage) {
+      // Return a test image URL from public folder (e.g., /testImage.jpg)
+      return "/testImage.jpg";
+    }
+    try {
+      const response = await fetch("/api/captureImage");
+      if (!response.ok) throw new Error(await response.text());
+      const blob = await response.blob();
+      console.log("Image Blob:", blob);
+      const imgUrl = URL.createObjectURL(blob);
+      console.log("Image URL:", imgUrl);
+      return imgUrl;
+    } catch (error) {
+      console.error("Camera error:", error);
+      alert("Camera Error: Failed to capture image");
+      return null;
+    }
+  };
 
-  // Handle human clicks on the bot's board.
+  // Handle human click on bot's board.
   const handleHumanClick = (row: number, col: number) => {
     if (!isHumanTurn || !difficulty || gameOver) return;
     const key = `${col},${row}`;
@@ -102,10 +127,7 @@ const GamePage = () => {
       return;
     }
     botAttacked.add(key);
-
-    // Process human attack on bot's board.
     if (botBoard[row][col] === 1 || typeof botBoard[row][col] === "string") {
-      // A hit on bot's board: (for human side, we use the standard logic)
       console.log(`Human attacked ${col},${row} and hit a ship.`);
       setHumanHits((prev) => {
         const newHits = prev + 1;
@@ -130,121 +152,183 @@ const GamePage = () => {
       );
       setBotGrid(newGrid);
     }
-
-    // Update LEDs after the human's turn
-    updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);  // Call LED update here
-
-    // End human turn, then trigger bot turn after delay.
+    updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
     setIsHumanTurn(false);
-    setTimeout(() => {
-      if (!gameOver) {
-        if (difficulty === "medium") {
-          // Medium uses the probability strategy (one shot per turn).
-          const probGrid = generateProbabilitiesForAllShips(
-            boardProbHits,
-            boardProbMisses
-          );
-          console.log("Probability board (medium):", probGrid);
-          const { row: nextRow, col: nextCol } = generateNextMove(probGrid);
-          console.log(`Medium bot selecting ${nextCol},${nextRow}`);
-          if (humanBoard[nextRow][nextCol] !== 0) {
-            // A hit: update matrices.
-            console.log(`Medium bot hit at ${nextCol},${nextRow}`);
-            setBotHits((prev) => {
-              const newHits = prev + 1;
-              if (newHits >= TOTAL_SHIP_SQUARES) {
-                setGameOver(true);
-                setWinner("bot");
-              }
-              return newHits;
-            });
-            const newProbHits = boardProbHits.map((r) => [...r]);
-            newProbHits[nextRow][nextCol] = 1;
-            setBoardProbHits(newProbHits);
-          } else {
-            console.log(`Medium bot missed at ${nextCol},${nextRow}`);
-            const newProbMisses = boardProbMisses.map((r) => [...r]);
-            newProbMisses[nextRow][nextCol] = 1;
-            setBoardProbMisses(newProbMisses);
+setTimeout(() => {
+  if (!gameOver) {
+    if (difficulty === "medium") {
+      const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
+      console.log("Probability board (medium):", probGrid);
+      const { row: nextRow, col: nextCol } = generateNextMove(probGrid);
+      console.log(`Medium bot selecting ${nextCol},${nextRow}`);
+      if (humanBoard[nextRow][nextCol] !== 0) {
+        console.log(`Medium bot hit at ${nextCol},${nextRow}`);
+        setBotHits((prev) => {
+          const newHits = prev + 1;
+          if (newHits >= TOTAL_SHIP_SQUARES) {
+            setGameOver(true);
+            setWinner("bot");
           }
-          
-        } else if (difficulty === "hard") {
-          // Hard difficulty: use the probability strategy but if a hit occurs,
-          // then destroy the entire boat (all cells with the same boat id) in one turn.
-          const probGrid = generateProbabilitiesForAllShips(
-            boardProbHits,
-            boardProbMisses
-          );
-          console.log("Probability board (hard):", probGrid);
-          const { row: nextRow, col: nextCol } = generateNextMove(probGrid);
-          console.log(`Hard bot selecting ${nextCol},${nextRow}`);
-          if (humanBoard[nextRow][nextCol] !== 0) {
-            // A hit: retrieve the boat id.
-            const boatId = humanBoard[nextRow][nextCol];
-            console.log(
-              `Hard bot hit boat ${boatId} at ${nextCol},${nextRow}. Uncovering entire boat.`
-            );
-            let addedHits = 0;
-            const newHumanBoard = humanBoard.map((r) => [...r]);
-            const newProbHits = boardProbHits.map((r) => [...r]);
-            const newHumanAttacked = new Set(humanAttacked);
-            for (let i = 0; i < GRID_SIZE; i++) {
-              for (let j = 0; j < GRID_SIZE; j++) {
-                if (newHumanBoard[i][j] === boatId) {
-                  newHumanBoard[i][j] = 0; // mark as hit
-                  newProbHits[i][j] = 1;
-                  const cellKey = `${j},${i}`;
-                  if (!newHumanAttacked.has(cellKey)) {
-                    newHumanAttacked.add(cellKey);
-                    addedHits++;
-                  }
-                }
-              }
-            }
-            setHumanAttacked(newHumanAttacked);
-            setBoardProbHits(newProbHits);
-            setHumanBoard(newHumanBoard);
-            setBotHits((prev) => {
-              const newHits = prev + addedHits;
-              if (newHits >= TOTAL_SHIP_SQUARES) {
-                setGameOver(true);
-                setWinner("bot");
-              }
-              return newHits;
-            });
-          } else {
-            console.log(`Hard bot missed at ${nextCol},${nextRow}`);
-            const newProbMisses = boardProbMisses.map((r) => [...r]);
-            newProbMisses[nextRow][nextCol] = 1;
-            setBoardProbMisses(newProbMisses);
-          }
-          
-        } else {
-          // Easy and hard (if not using probability) fallback to previous bot strategy.
-          const updatedQueue = easyBotTurn(
-            humanBoard as number[][],
-            humanAttacked,
-            botQueue,
-            () => {
-              setBotHits((prev) => {
-                const newHits = prev + 1;
-                if (newHits >= TOTAL_SHIP_SQUARES) {
-                  setGameOver(true);
-                  setWinner("bot");
-                }
-                return newHits;
-              });
-            }
-          );
-          setBotQueue([...updatedQueue]);
-        }
-        console.log("Bot turn completed.");
-        updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);  // Call LED update after the bot's turn as well
-        setIsHumanTurn(true);
+          return newHits;
+        });
+        const newProbHits = boardProbHits.map((r) => [...r]);
+        newProbHits[nextRow][nextCol] = 1;
+        setBoardProbHits(newProbHits);
+        // Update humanAttacked because the bot is attacking the human board.
+        const newHumanAttacked = new Set(humanAttacked);
+        newHumanAttacked.add(`${nextCol},${nextRow}`);
+        setHumanAttacked(newHumanAttacked);
+      } else {
+        console.log(`Medium bot missed at ${nextCol},${nextRow}`);
+        const newProbMisses = boardProbMisses.map((r) => [...r]);
+        newProbMisses[nextRow][nextCol] = 1;
+        setBoardProbMisses(newProbMisses);
+        const newHumanAttacked = new Set(humanAttacked);
+        newHumanAttacked.add(`${nextCol},${nextRow}`);
+        setHumanAttacked(newHumanAttacked);
       }
-    }, 1000);
+    } else if (difficulty === "hard") {
+      const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
+      console.log("Probability board (hard):", probGrid);
+      const { row: nextRow, col: nextCol } = generateNextMove(probGrid);
+      console.log(`Hard bot selecting ${nextCol},${nextRow}`);
+      if (humanBoard[nextRow][nextCol] !== 0) {
+        const boatId = humanBoard[nextRow][nextCol];
+        console.log(`Hard bot hit boat ${boatId} at ${nextCol},${nextRow}. Uncovering entire boat.`);
+        let addedHits = 0;
+        const newHumanBoard = humanBoard.map((r) => [...r]);
+        const newProbHits = boardProbHits.map((r) => [...r]);
+        const newHumanAttacked = new Set(humanAttacked);
+        for (let i = 0; i < GRID_SIZE; i++) {
+          for (let j = 0; j < GRID_SIZE; j++) {
+            if (newHumanBoard[i][j] === boatId) {
+              newHumanBoard[i][j] = 0; // mark as hit
+              newProbHits[i][j] = 1;
+              const cellKey = `${j},${i}`;
+              if (!newHumanAttacked.has(cellKey)) {
+                newHumanAttacked.add(cellKey);
+                addedHits++;
+              }
+            }
+          }
+        }
+        setHumanAttacked(newHumanAttacked);
+        setBoardProbHits(newProbHits);
+        setHumanBoard(newHumanBoard);
+        setBotHits((prev) => {
+          const newHits = prev + addedHits;
+          if (newHits >= TOTAL_SHIP_SQUARES) {
+            setGameOver(true);
+            setWinner("bot");
+          }
+          return newHits;
+        });
+      } else {
+        console.log(`Hard bot missed at ${nextCol},${nextRow}`);
+        const newProbMisses = boardProbMisses.map((r) => [...r]);
+        newProbMisses[nextRow][nextCol] = 1;
+        setBoardProbMisses(newProbMisses);
+        const newHumanAttacked = new Set(humanAttacked);
+        newHumanAttacked.add(`${nextCol},${nextRow}`);
+        setHumanAttacked(newHumanAttacked);
+      }
+    } else {
+      const updatedQueue = easyBotTurn(
+        humanBoard as number[][],
+        humanAttacked,
+        botQueue,
+        () => {
+          setBotHits((prev) => {
+            const newHits = prev + 1;
+            if (newHits >= TOTAL_SHIP_SQUARES) {
+              setGameOver(true);
+              setWinner("bot");
+            }
+            return newHits;
+          });
+        }
+      );
+      setBotQueue([...updatedQueue]);
+    }
+    console.log("Bot turn completed.");
+    updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
+    setIsHumanTurn(true);
+  }
+}, 1000);
+
   };
 
+  // Start Game Section: Capture Image / Test Mode
+  if (!gameStarted) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-4">
+        <div className="relative w-full max-w-md aspect-video bg-gray-800 rounded-lg overflow-hidden">
+          {cameraImage ? (
+            <img
+              src={cameraImage}
+              alt="Camera Preview"
+              className="w-full h-full object-cover border border-red-500"
+              onLoad={() => console.log("Image loaded successfully")}
+              onError={() => console.error("Failed to load image")}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-400">
+              Camera feed will appear here
+            </div>
+          )}
+        </div>
+        <div className="flex gap-4">
+          {!cameraImage && (
+            <>
+              <button
+                className="bg-blue-500 hover:bg-blue-700 text-white px-6 py-3 rounded text-xl"
+                onClick={async () => {
+                  try {
+                    const imgUrl = await captureImage();
+                    if (imgUrl) {
+                      setCameraImage(imgUrl);
+                    }
+                  } catch (error) {
+                    alert("Camera Error: Unexpected error occurred.");
+                  }
+                }}
+              >
+                Start Game (Take Picture)
+              </button>
+              <button
+                className="bg-purple-500 hover:bg-purple-700 text-white px-6 py-3 rounded text-xl"
+                onClick={async () => {
+                  // Enable test mode: use a local test image.
+                  setUseTestImage(true);
+                  const testImg = "/testImage.jpg"; // Place a test image in your public folder.
+                  setCameraImage(testImg);
+                }}
+              >
+                Test Mode (Random Image)
+              </button>
+            </>
+          )}
+          {cameraImage && (
+            <button
+              className="bg-green-500 hover:bg-green-700 text-white px-6 py-3 rounded text-xl"
+              onClick={() => {
+                setImageConfirmed(true);
+                setGameStarted(true);
+              }}
+            >
+              Continue
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (!imageConfirmed) {
+    return null;
+  }
+
+  // Difficulty selection screen
   if (!difficulty) {
     return (
       <div className="flex items-center justify-center h-screen">
