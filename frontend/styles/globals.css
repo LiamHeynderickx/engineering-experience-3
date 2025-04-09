@@ -1,3 +1,103 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Import custom animations */
+@import './animations.css';
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+/* Battleship Game Styles */
+.game-container {
+  @apply max-w-6xl mx-auto py-8 px-4;
+}
+
+.game-title {
+  @apply text-4xl font-bold text-center text-blue-800 mb-8;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.game-section {
+  @apply bg-white rounded-lg shadow-lg p-6 mb-8;
+}
+
+.section-title {
+  @apply text-2xl font-bold mb-4 text-gray-800;
+}
+
+/* Button styles */
+.btn {
+  @apply px-4 py-2 rounded font-medium transition-colors duration-200;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.btn-success {
+  @apply bg-green-600 text-white hover:bg-green-700;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white hover:bg-red-700;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-lg shadow-md overflow-hidden;
+}
+
+.card-header {
+  @apply bg-blue-600 text-white p-4 font-bold;
+}
+
+.card-body {
+  @apply p-4;
+}
+
+/* Ship styles */
+.ship-carrier {
+  @apply bg-gray-700;
+}
+
+.ship-battleship {
+  @apply bg-gray-600;
+}
+
+.ship-cruiser {
+  @apply bg-gray-500;
+}
+
+.ship-submarine {
+  @apply bg-gray-400;
+}
+
+.ship-destroyer {
+  @apply bg-gray-300;
+}

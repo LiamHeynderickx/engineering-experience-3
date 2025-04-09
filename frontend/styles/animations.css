@@ -1,0 +1,414 @@
+/* Water and wave animations */
+.wave-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.1) 5px,
+    transparent 5px,
+    transparent 10px
+  );
+  animation: wave-animation 8s linear infinite;
+  opacity: 0.4;
+}
+
+@keyframes wave-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 50px 50px;
+  }
+}
+
+/* Miss marker animation - X for misses */
+.miss-marker::after {
+  content: none; /* Remove the default animation */
+}
+
+/* Miss marker - SVG X styling */
+.miss-x {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.9));
+  opacity: 0.9;
+}
+
+.miss-x line {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: draw-x 0.5s forwards;
+  stroke: white;
+  stroke-linecap: round;
+}
+
+.miss-x line:first-child {
+  animation-delay: 0.1s;
+}
+
+@keyframes draw-x {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Add a distinct shadow to make the X stand out better */
+.miss-marker div {
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8), 0 0 10px rgba(255, 255, 255, 0.6);
+}
+
+/* Hit marker animation */
+.hit-marker {
+  animation: hit-pulse 1.5s ease-out 2;
+  transform-origin: center;
+}
+
+.hit-marker > div {
+  box-shadow: 0 0 10px 2px rgba(220, 38, 38, 0.6);
+  transform: translate(-50%, -50%);
+  top: 50%;
+  left: 50%;
+}
+
+@keyframes hit-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+    transform: scale(0.8);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    transform: scale(1);
+  }
+}
+
+/* Bomb animation - updated for better positioning */
+.bomb-drop {
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  background-color: #333;
+  border-radius: 50%;
+  animation: bomb-fall 0.5s ease-in;
+  z-index: 10;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@keyframes bomb-fall {
+  0% {
+    top: -20px;
+    opacity: 1;
+    transform: translateX(-50%) scale(0.7) rotate(0deg);
+  }
+  90% {
+    top: 50%;
+    opacity: 1;
+    transform: translateX(-50%) scale(1) rotate(45deg);
+  }
+  100% {
+    top: 50%;
+    opacity: 0;
+    transform: translateX(-50%);
+  }
+}
+
+.explosion {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,87,34,1) 0%, rgba(255,193,7,1) 50%, rgba(255,255,255,0.8) 100%);
+  opacity: 0;
+  animation: explosion 0.8s ease-out;
+  animation-delay: 0.4s;
+  z-index: 20;
+}
+
+@keyframes explosion {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.9;
+  }
+  50% {
+    width: 30px;
+    height: 30px;
+    opacity: 1;
+  }
+  100% {
+    width: 40px;
+    height: 40px;
+    opacity: 0;
+  }
+}
+
+/* Fire effect animation */
+.fire-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.flame {
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(to top, #ff5722, #ffeb3b);
+  border-radius: 2px 2px 10px 10px;
+  box-shadow: 0 0 10px 5px rgba(255, 87, 34, 0.3);
+  animation: flicker 0.5s infinite alternate;
+}
+
+@keyframes flicker {
+  0% {
+    height: 10px;
+    opacity: 0.8;
+  }
+  25% {
+    height: 12px;
+    opacity: 1;
+  }
+  50% {
+    height: 10px;
+    opacity: 0.8;
+  }
+  75% {
+    height: 14px;
+    opacity: 1;
+  }
+  100% {
+    height: 12px;
+    opacity: 0.9;
+  }
+}
+
+/* Compass animation */
+.compass-rose {
+  animation: compass-rotate 20s linear infinite;
+}
+
+@keyframes compass-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Ship sinking animation */
+@keyframes sink {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(10px) rotate(5deg);
+    opacity: 0.5;
+  }
+}
+
+.sinking {
+  animation: sink 2s ease-in-out forwards;
+}
+
+/* Camera flash animation */
+@keyframes flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.7; }
+}
+
+.animate-flash {
+  animation: flash 0.5s ease-out;
+}
+
+/* Camera scanning line */
+.camera-processing .scanning-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(59, 130, 246, 0.7);
+  animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+  0% { top: 0; }
+  100% { top: 100%; }
+}
+
+/* Toggle checkbox styling */
+.toggle-checkbox:checked {
+  transform: translateX(100%);
+  border-color: #3b82f6;
+}
+
+.toggle-checkbox:checked + .toggle-label {
+  background-color: #3b82f6;
+}
+
+/* Smoke effect for hit ships */
+.smoke-effect {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: 20px;
+  pointer-events: none;
+}
+
+.smoke {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: rgba(200, 200, 200, 0.8);
+  border-radius: 50%;
+  transform-origin: center bottom;
+}
+
+.smoke-1 {
+  left: 20%;
+  animation: smoke-rise 2s infinite ease-out;
+}
+
+.smoke-2 {
+  left: 50%;
+  animation: smoke-rise 2s infinite ease-out 0.5s;
+}
+
+.smoke-3 {
+  left: 80%;
+  animation: smoke-rise 2s infinite ease-out 1s;
+}
+
+@keyframes smoke-rise {
+  0% {
+    transform: scale(0.5) translate(0, 0);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5) translate(0, -20px);
+    opacity: 0;
+  }
+}
+
+/* Ship part styles for visual representation */
+.ship-part {
+  width: 90%;
+  height: 90%;
+  position: relative;
+  border-radius: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.ship-bow-horizontal {
+  width: 80%;
+  height: 70%;
+  border-radius: 50% 0 0 50%;
+}
+
+.ship-bow-vertical {
+  width: 70%;
+  height: 80%;
+  border-radius: 50% 50% 0 0;
+}
+
+.ship-stern-horizontal {
+  width: 80%;
+  height: 70%;
+  border-radius: 0 50% 50% 0;
+}
+
+.ship-stern-vertical {
+  width: 70%;
+  height: 80%;
+  border-radius: 0 0 50% 50%;
+}
+
+.ship-middle-horizontal {
+  width: 90%;
+  height: 60%;
+}
+
+.ship-middle-vertical {
+  width: 60%;
+  height: 90%;
+}
+
+.ship-single {
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+}
+
+/* Ship segment styles for fleet summary */
+.ship-segment {
+  flex: 1;
+  height: 100%;
+  background-color: #555;
+  position: relative;
+  overflow: visible;
+}
+
+.ship-bow {
+  border-radius: 50% 0 0 50%;
+  background-color: #444;
+}
+
+.ship-middle {
+  background-color: #555;
+}
+
+.ship-stern {
+  border-radius: 0 50% 50% 0;
+  background-color: #444;
+}
+
+/* Smaller smoke effect for fleet summary */
+.smoke-effect-small {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: 16px;
+}
+
+.smoke-small {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: rgba(200, 200, 200, 0.8);
+  border-radius: 50%;
+  left: 50%;
+  animation: smoke-rise-small 1.5s infinite ease-out;
+}
+
+@keyframes smoke-rise-small {
+  0% {
+    transform: scale(0.5) translate(0, 0);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.2) translate(0, -10px);
+    opacity: 0;
+  }
+}
+
+/* Ship sunk styling */
+.ship-sunk {
+  animation: sink 1s ease-out forwards;
+} 
