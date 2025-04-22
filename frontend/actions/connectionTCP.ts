@@ -52,26 +52,29 @@ export function generateLEDArray(humanBoard: (number | string)[][], botBoard: (n
 export function updateLEDsAfterTurn(humanBoard: (number | string)[][], botBoard: (number | string)[][], humanAttacked: Set<string>, botAttacked: Set<string>) {
     const ledArray = generateLEDArray(humanBoard, botBoard, humanAttacked, botAttacked);
     console.log("Generated LED Array:", ledArray);  // Log the generated LED array
-    
+
     // Send the ledArray to the API route
     fetch('/api/sendLedData', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+            'Content-Type': 'application/json',
         },
         body: JSON.stringify({ ledArray }),
-      })
+    })
         .then((response) => {
-          console.log('Response status:', response.status);
-          return response.json();
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
         })
         .then((data) => {
-          console.log('LED data sent:', data.message);
+            console.log('LED data sent:', data.message);
         })
         .catch((error) => {
-          console.error('Error sending LED data:', error);
+            console.error('Error sending LED data:', error);
+            console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
         });
-      
-  }
+}
   
   
