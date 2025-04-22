@@ -6,8 +6,16 @@ import { generateProbabilitiesForAllShips, generateNextMove } from "../../action
 import { createMatrix } from "../../actions/helpers";
 import { updateLEDsAfterTurn } from "../../actions/connectionTCP";
 
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    SpeechRecognition: any;
+  }
+}
+
 const GRID_SIZE = 10;
 const TOTAL_SHIP_SQUARES = 17;
+
 
 const GamePage = () => {
   // Game control states
@@ -43,6 +51,46 @@ const GamePage = () => {
   // For probability strategies (medium and hard)
   const [boardProbHits, setBoardProbHits] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
   const [boardProbMisses, setBoardProbMisses] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
+
+  // at top of your GamePage component
+  let recognizer: any = null;
+  if (typeof window !== "undefined") {
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (Speech) {
+      recognizer = new Speech();
+      recognizer.lang = "en-US";
+      recognizer.interimResults = false;
+      recognizer.maxAlternatives = 1;
+    }
+  }
+  
+  const handleVoiceAttack = () => {
+    if (!isHumanTurn || !recognizer || !difficulty || gameOver) return;
+  
+    recognizer.onstart = () => console.log("🎤 Listening for coordinate…");
+    // 2) use `any` for the event
+    recognizer.onresult = (evt: any) => {
+      const text = evt.results[0][0].transcript
+                    .trim()
+                    .toUpperCase()
+                    .replace(/\s+/g, "");
+      console.log("Heard:", text);
+      const m = text.match(/^([A-J])([1-9]|10)$/);
+      if (!m) {
+        return alert("Sorry, I didn’t catch a valid cell (e.g. B7). Try again.");
+      }
+      const col = "ABCDEFGHIJ".indexOf(m[1]);
+      const row = parseInt(m[2], 10) - 1;
+      handleHumanClick(row, col);
+    };
+    recognizer.onerror = (e: any) => {
+      console.error("Speech error", e);
+      alert("Sorry, couldn’t understand you. Please try again.");
+    };
+  
+    recognizer.start();
+  };
+
 
   // When difficulty is selected, initialize boards and reset state.
   // After image capture, we call our new processBoard endpoint.
@@ -409,8 +457,22 @@ const GamePage = () => {
   return (
     <div className="flex flex-col items-center justify-center h-screen">
       <div className="mb-4 text-center text-xl">
-        {isHumanTurn ? "Your Turn" : "Bot's Turn"}
-      </div>
+  {isHumanTurn ? (
+    <div className="space-x-4">
+      <span>Your Turn</span>
+      <button
+        className="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-1 rounded"
+        onClick={handleVoiceAttack}
+      >
+        Attack by Voice
+      </button>
+    </div>
+  ) : (
+    "Bot's Turn"
+  )}
+</div>
+
+
       <div className="grid grid-cols-10 gap-0.5 bg-black p-2 rounded-lg">
         {botGrid.map((row, rowIndex) =>
           row.map((cell, colIndex) => (
