@@ -55,10 +55,10 @@ const GamePage = () => {
       // Instead of generating the human board randomly, process the captured image.
       if (cameraImage) {
         processCapturedImage(cameraImage)
-          .then((data) => {
-            if (data && data.board) {
-              setHumanBoard(data.board);
-              console.log("Processed Human Board:", data.board);
+          .then((matrix) => {
+                if (Array.isArray(matrix)) {
+                  setHumanBoard(matrix);
+                  console.log("Processed Human Board:", matrix);
             } else {
               // Fallback if processing fails.
               const human = generateBoard(useHard);
@@ -130,7 +130,7 @@ const GamePage = () => {
   // If test mode is enabled, return a local test image.
   const captureImage = async (): Promise<string | null> => {
     if (useTestImage) {
-      return "/testImage.jpg";
+      return "/testImage4.jpg";
     }
     try {
       const response = await fetch("/api/captureImage");
@@ -202,6 +202,7 @@ const GamePage = () => {
             // Update humanAttacked because bot is attacking human board.
             const newHumanAttacked = new Set(humanAttacked);
             newHumanAttacked.add(`${nextCol},${nextRow}`);
+            updateLEDsAfterTurn(humanBoard, botBoard, newHumanAttacked, botAttacked);
             setHumanAttacked(newHumanAttacked);
           } else {
             console.log(`Medium bot missed at ${nextCol},${nextRow}`);
@@ -210,8 +211,10 @@ const GamePage = () => {
             setBoardProbMisses(newProbMisses);
             const newHumanAttacked = new Set(humanAttacked);
             newHumanAttacked.add(`${nextCol},${nextRow}`);
+            updateLEDsAfterTurn(humanBoard, botBoard, newHumanAttacked, botAttacked);
             setHumanAttacked(newHumanAttacked);
           }
+      
         } else if (difficulty === "hard") {
           const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
           console.log("Probability board (hard):", probGrid);
@@ -257,6 +260,7 @@ const GamePage = () => {
             newHumanAttacked.add(`${nextCol},${nextRow}`);
             setHumanAttacked(newHumanAttacked);
           }
+          updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
         } else {
           const updatedQueue = easyBotTurn(
             humanBoard as number[][],
@@ -274,9 +278,10 @@ const GamePage = () => {
             }
           );
           setBotQueue([...updatedQueue]);
+          updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
         }
         console.log("Bot turn completed.");
-        updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
+        //updateLEDsAfterTurn(humanBoard, botBoard, humanAttacked, botAttacked);
         setIsHumanTurn(true);
       }
     }, 1000);
@@ -324,7 +329,7 @@ const GamePage = () => {
                 onClick={async () => {
                   // Enable test mode: use a local test image.
                   setUseTestImage(true);
-                  const testImg = "/testImage.jpg"; // Place a test image in your public folder.
+                  const testImg = "/testImage4.jpg"; // Place a test image in your public folder.
                   setCameraImage(testImg);
                 }}
               >
