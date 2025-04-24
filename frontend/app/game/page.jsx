@@ -120,7 +120,7 @@ export default function GamePage() {
 
           <ShipStatus
             ships={Array.from(gameState.sunkEnemyShips).map((id) => {
-              const nameMap: Record<string, string> = {
+              const nameMap = {
                 "5": "Carrier",
                 "4": "Battleship",
                 "3a": "Cruiser",
