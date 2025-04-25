@@ -511,25 +511,51 @@ const GamePage = () => {
             Enemy Waters
           </h2>
           <div className="grid grid-cols-10 gap-0.5 bg-black p-2 rounded-lg">
-            {botGrid.map((row, r) =>
-              row.map((cell, c) => {
-                const key = `${c},${r}`;
-                const attacked = botAttacked.has(key);
-                return (
-                  <div
-                    key={key}
-                    className={`w-10 h-10 rounded-lg cursor-pointer transition-colors ${
-                      cell === "blue"
-                        ? "bg-blue-500"
-                        : cell === "green"
-                        ? "bg-green-500"
-                        : "bg-red-500"
-                    } ${attacked ? "opacity-80 cursor-not-allowed" : ""}`}
-                    onClick={() => handleHumanClick(r, c)}
-                  />
-                );
-              })
-            )}
+          {botGrid.map((row, r) =>
+  row.map((cell, c) => {
+    const key     = `${c},${r}`;
+    const isHit   = cell === "green";
+    const isMiss  = cell === "red";
+    const attacked = botAttacked.has(key);
+
+    return (
+      <div
+        key={key}
+        className="relative w-10 h-10 rounded-lg bg-blue-500"
+        onClick={() => !attacked && handleHumanClick(r, c)}
+      >
+        {/* MISS: white X */}
+        {isMiss && (
+          <div
+            className="absolute inset-0 flex items-center justify-center text-white text-2xl"
+            style={{ animation: "fadeIn 0.25s ease-out forwards" }}
+          >
+            ✕
+          </div>
+        )}
+
+        {/* HIT: red drop + smoke */}
+        {isHit && (
+          <>
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ animation: "drop 0.3s ease-out forwards" }}
+            >
+              <div className="w-6 h-6 rounded-full bg-green-500" />
+            </div>
+            <div
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              style={{ animation: "smoke 10.6s ease-out forwards" }}
+            >
+              <div className="w-4 h-4 bg-gray-300 rounded-full opacity-50" />
+            </div>
+          </>
+        )}
+      </div>
+    );
+  })
+)}
+
           </div>
         </div>
 
