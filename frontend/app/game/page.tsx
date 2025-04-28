@@ -4,8 +4,7 @@ import { generateBoard } from "../../actions/functions";
 import { botTurn as easyBotTurn } from "../../actions/functions";
 import { generateProbabilitiesForAllShips, generateNextMove } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
-import { updateLEDsAfterTurn } from "../../actions/connectionTCP";
-import { updateLEDsListening } from '../../actions/connectionTCP';
+import { updateLEDsAfterTurn, updateLEDsListening, updateLEDsVictory, updateLEDsDefeat } from '../../actions/connectionTCP';
 
 // Remove any previous conflicting declarations
 declare global {
@@ -132,42 +131,59 @@ const GamePage = () => {
     }
   }, [difficulty, cameraImage, generateInitialBoard]);
 
+  // Function to reset LEDs explicitly
+  const resetLEDs = () => {
+    console.log('Explicitly resetting LEDs');
+    const emptyArray = Array(200).fill(0);
+    fetch('/api/sendLedData', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ledArray: emptyArray }),
+    })
+      .then(res => {
+        console.log('LEDs reset, status', res.status);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      })
+      .catch(err => {
+        console.error('Error resetting LEDs:', err);
+      });
+  };
+
   // Fix the issue with LED zeros timeout by adding a delay
   useEffect(() => {
     // Flag to prevent state updates after unmount
     let isMounted = true;
     
-    // Only send zeros to clear LEDs if game hasn't started yet
-    if (!gameStarted && !difficulty) {
-      console.log('Resetting LEDs on page load/refresh');
-      
-      // Add a small delay to allow connection to establish
-      setTimeout(() => {
-        if (!isMounted) return;
-        
-        // Turn off all LEDs when the page loads using array of zeros
-        const emptyArray = Array(200).fill(0);
-        fetch('/api/sendLedData', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ledArray: emptyArray }),
-        })
-          .then(res => {
-            if (!isMounted) return;
-            console.log('Empty LEDs sent, status', res.status);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          })
-          .catch(err => {
-            if (!isMounted) return;
-            console.error('Error sending empty LEDs:', err);
-          });
-      }, 1000); // 1 second delay
-    }
+    // Reset the LEDs whenever component mounts
+    console.log('Resetting LEDs on page load/refresh');
+    
+    // Reset immediately and then again after a delay to ensure connection
+    resetLEDs();
+    
+    // Add a small delay to allow connection to establish
+    setTimeout(() => {
+      if (!isMounted) return;
+      resetLEDs();
+    }, 1000); // 1 second delay
         
     return () => {
       isMounted = false;
+      // Also try to reset when unmounting
+      resetLEDs();
     };
-  }, [gameStarted, difficulty]);
+  }, []); // Run only once on component mount
+
+  // Effect to trigger game over LED sequence
+  useEffect(() => {
+    if (gameOver) {
+      if (winner === 'human') {
+        updateLEDsVictory();
+      } else if (winner === 'bot') {
+        updateLEDsDefeat();
+      }
+    }
+    // Dependency array ensures this runs only when gameOver or winner changes
+  }, [gameOver, winner]);
 
   // Fix type safety in processCapturedImage
   const processCapturedImage = async (imgUrl: string): Promise<(number | string)[][] | null> => {
@@ -254,6 +270,9 @@ const GamePage = () => {
       URL.revokeObjectURL(cameraImage);
     }
     
+    // Reset LEDs explicitly with zeros
+    resetLEDs();
+    
     // Reset all game-related state
     setDifficulty(null);
     setCameraImage(null);
@@ -301,6 +320,7 @@ const GamePage = () => {
       setHumanHits((prev) => {
         const newHits = prev + 1;
         if (newHits >= TOTAL_SHIP_SQUARES) {
+          console.log("Game Over - Human Wins!");
           setGameOver(true);
           setWinner("human");
         }
@@ -336,151 +356,171 @@ const GamePage = () => {
     }
   };
 
-  // Bot turn logic - accepts the latest botAttacked set as an argument
-  const botTurn = (currentBotAttacked: Set<string> = botAttacked) => {
-    // Use the passed-in currentBotAttacked, defaulting to state if not provided (e.g., for initial call)
+  // Bot turn logic - Aligning medium/hard post-hit logic with easy mode
+  const botTurn = (
+    currentBotAttacked: Set<string> = botAttacked, // Bot's attacks THIS turn
+    latestHumanAttacked: Set<string> = humanAttacked // Human's state BEFORE this turn
+  ) => {
     if (gameOver) return;
     
-    let botHitShip = false;
-    let nextMove = { row: 0, col: 0 };
-    let currentHumanAttacked = humanAttacked; // Start with current state
+    console.log("Bot's turn starting with latestHumanAttacked:", latestHumanAttacked);
     
-    // Handle bot turn based on difficulty
+    // Use the passed-in humanAttacked state, default to component state if first turn
+    let currentHumanAttacked = new Set(latestHumanAttacked);
+    let hitShip = false;
+    
     if (difficulty === "medium" || difficulty === "hard") {
-      // Generate probability grid for intelligent targeting
-      const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
-      nextMove = generateNextMove(probGrid);
-      
-      console.log(`${difficulty} bot selecting ${nextMove.col},${nextMove.row}`);
-      
-      const key = `${nextMove.col},${nextMove.row}`;
-      if (humanAttacked.has(key)) {
-        console.log(`Cell ${nextMove.col},${nextMove.row} already attacked by bot.`);
-        setTimeout(() => botTurn(currentBotAttacked), 50); // Retry quickly, passing the same botAttacked state
-        return;
-      }
-      
-      // Create new Set and add the attacked cell
-      const newHumanAttacked = new Set(humanAttacked);
-      newHumanAttacked.add(key);
-      currentHumanAttacked = newHumanAttacked; // Update the set for this turn's LED update
-      
-      // Check if hit or miss
-      if (humanBoard[nextMove.row][nextMove.col] !== 0) {
-        botHitShip = true;
+      try {
+        // Generate probability grid for intelligent targeting
+        const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
+        const nextMove = generateNextMove(probGrid);
         
-        if (difficulty === "hard") {
-          // Hard mode: reveal entire boat when hit
-          const boatId = humanBoard[nextMove.row][nextMove.col];
-          console.log(`Hard bot hit boat ${boatId} at ${nextMove.col},${nextMove.row}. Uncovering entire boat.`);
+        console.log(`${difficulty} bot selecting ${nextMove.col},${nextMove.row}`);
+        
+        // Check if cell has already been attacked using the LATEST set
+        const key = `${nextMove.col},${nextMove.row}`;
+        if (currentHumanAttacked.has(key)) {
+          console.log(`Cell ${key} already attacked by bot, retrying...`);
+          // Retry with the SAME latestHumanAttacked state
+          setTimeout(() => botTurn(currentBotAttacked, latestHumanAttacked), 50);
+          return;
+        }
+        
+        // Add the cell to the attacked set for THIS turn
+        currentHumanAttacked.add(key);
+        
+        // Check if hit or miss
+        const targetValue = humanBoard[nextMove.row][nextMove.col];
+        if (targetValue !== 0) {
+          // It's a hit!
+          hitShip = true;
+          console.log(`${difficulty} bot hit at ${key}`, targetValue);
           
-          let addedHits = 0;
-          const newHumanBoard = humanBoard.map((r) => [...r]);
-          const newProbHits = boardProbHits.map((r) => [...r]);
-          
-          // Mark all cells of the same boat as hit
-          for (let i = 0; i < GRID_SIZE; i++) {
-            for (let j = 0; j < GRID_SIZE; j++) {
-              if (newHumanBoard[i][j] === boatId) {
-                newHumanBoard[i][j] = 0; // mark as hit
-                newProbHits[i][j] = 1;
-                const cellKey = `${j},${i}`;
-                if (!newHumanAttacked.has(cellKey)) {
-                  newHumanAttacked.add(cellKey);
-                  addedHits++;
+          if (difficulty === "hard") {
+            // Hard mode: reveal entire boat
+            const boatId = targetValue;
+            let addedHits = 0;
+            const newProbHits = [...boardProbHits.map(row => [...row])];
+            
+            // Mark all cells of the same boat as hit in hard mode
+            for (let i = 0; i < GRID_SIZE; i++) {
+              for (let j = 0; j < GRID_SIZE; j++) {
+                if (humanBoard[i][j] === boatId) {
+                  newProbHits[i][j] = 1;
+                  const cellKey = `${j},${i}`;
+                  // Use currentHumanAttacked for the check and update
+                  if (!currentHumanAttacked.has(cellKey)) {
+                    currentHumanAttacked.add(cellKey);
+                    addedHits++;
+                  }
                 }
               }
             }
-          }
-          
-          // Update state
-          setHumanAttacked(newHumanAttacked);
-          setBoardProbHits(newProbHits);
-          setHumanBoard(newHumanBoard);
-          
-          // Update hit counter and check for game over
-          setBotHits((prev) => {
-            const newHits = prev + addedHits;
-            if (newHits >= TOTAL_SHIP_SQUARES) {
-              setGameOver(true);
-              setWinner("bot");
-            }
-            return newHits;
-          });
-        } else {
-          // Medium mode: just mark the single cell as hit
-          console.log(`Medium bot hit at ${nextMove.col},${nextMove.row}`);
-          
-          // Update hit counter and check for game over
-          setBotHits((prev) => {
-            const newHits = prev + 1;
-            if (newHits >= TOTAL_SHIP_SQUARES) {
-              setGameOver(true);
-              setWinner("bot");
-            }
-            return newHits;
-          });
-          
-          // Update probability grid
-          const newProbHits = boardProbHits.map((r) => [...r]);
-          newProbHits[nextMove.row][nextMove.col] = 1;
-          setBoardProbHits(newProbHits);
-          
-          // Important: Update the humanAttacked set
-          setHumanAttacked(newHumanAttacked);
-        }
-      } else {
-        // Miss
-        console.log(`${difficulty} bot missed at ${nextMove.col},${nextMove.row}`);
-        
-        // Update probability grid
-        const newProbMisses = boardProbMisses.map((r) => [...r]);
-        newProbMisses[nextMove.row][nextMove.col] = 1;
-        setBoardProbMisses(newProbMisses);
-        
-        // Important: Update the humanAttacked set
-        setHumanAttacked(newHumanAttacked);
-      }
-      
-      // CRITICAL FIX: Pass the newHumanAttacked set (not the state) to update LEDs
-      updateLEDsAfterTurn(humanBoard, botBoard, newHumanAttacked, currentBotAttacked);
-    } else {
-      // Easy difficulty uses the predefined easyBotTurn function
-      // We need to get the updated humanAttacked set from easyBotTurn if possible,
-      // or rely on the state update (which might cause the same issue for easy)
-      // For now, we assume easyBotTurn updates humanAttacked state internally
-      // and we read the state `humanAttacked` for the LED update below.
-      // If easy mode also shows the bug, easyBotTurn needs modification.
-      const updatedQueue = easyBotTurn(
-          humanBoard as number[][],
-          humanAttacked, // Pass current state
-          botQueue,
-          () => {
-            botHitShip = true;
-            setBotHits((prev) => {
+            
+            // Update state using the set updated within this turn
+            setHumanAttacked(new Set(currentHumanAttacked)); 
+            setBoardProbHits(newProbHits);
+            
+            // Update hit counter and check for game over
+            setBotHits(prev => {
+              const newHits = prev + addedHits;
+              if (newHits >= TOTAL_SHIP_SQUARES) {
+                console.log("Game Over - Bot Wins!");
+                setGameOver(true);
+                setWinner("bot");
+              }
+              return newHits;
+            });
+          } else {
+            // Medium mode: single hit
+            const newProbHits = [...boardProbHits.map(row => [...row])];
+            newProbHits[nextMove.row][nextMove.col] = 1;
+            
+            // Update state using the set updated within this turn
+            setHumanAttacked(new Set(currentHumanAttacked));
+            setBoardProbHits(newProbHits);
+            
+            // Update hit counter and check for game over
+            setBotHits(prev => {
               const newHits = prev + 1;
               if (newHits >= TOTAL_SHIP_SQUARES) {
+                console.log("Game Over - Bot Wins!");
                 setGameOver(true);
                 setWinner("bot");
               }
               return newHits;
             });
           }
-      );
-      setBotQueue([...updatedQueue]);
-      currentHumanAttacked = humanAttacked; // Read potentially updated state after easyBotTurn
-    }
-    
-    // Update LEDs using the most current attack sets for BOTH players from THIS turn
-    updateLEDsAfterTurn(humanBoard, botBoard, currentHumanAttacked, currentBotAttacked);
-    console.log("Bot turn completed.");
-    
-    // Handle turn logic
-    if (botHitShip && !gameOver) {
-      // Pass the *same* currentBotAttacked set for the next consecutive bot turn
-      setTimeout(() => botTurn(currentBotAttacked), 1000);
+        } else {
+          // Miss
+          console.log(`${difficulty} bot missed at ${key}`);
+          const newProbMisses = [...boardProbMisses.map(row => [...row])];
+          newProbMisses[nextMove.row][nextMove.col] = 1;
+          
+          // Update state using the set updated within this turn
+          setHumanAttacked(new Set(currentHumanAttacked));
+          setBoardProbMisses(newProbMisses);
+        }
+        
+        // Update LEDs with the results of THIS turn
+        updateLEDsAfterTurn(humanBoard, botBoard, currentHumanAttacked, currentBotAttacked);
+        
+        // Schedule next turn or return control - MIRRORING EASY MODE STRUCTURE
+        if (hitShip && !gameOver) {
+          console.log(`${difficulty} bot hit a ship, going again after delay`);
+          // Pass the LATEST botAttacked and the UPDATED humanAttacked set from THIS turn
+          setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000);
+        } else {
+          console.log("Bot turn complete, returning control to player");
+          setIsHumanTurn(true);
+        }
+      } catch (error) {
+        console.error("Error in bot turn:", error);
+        setIsHumanTurn(true); // Safety fallback
+      }
     } else {
-      setIsHumanTurn(true);
+      // Easy difficulty uses the predefined easyBotTurn function
+      try {
+        // easyBotTurn MUTATES the humanAttacked set passed to it
+        const easyAttackedSet = new Set(latestHumanAttacked); 
+        const updatedQueue = easyBotTurn(
+          humanBoard as number[][],
+          easyAttackedSet, // Pass the mutable set
+          botQueue,
+          () => {
+            // This callback is called when a hit occurs IN easyBotTurn
+            hitShip = true;
+            setBotHits((prev) => {
+              const newHits = prev + 1;
+              if (newHits >= TOTAL_SHIP_SQUARES) {
+                console.log("Game Over - Bot Wins!");
+                setGameOver(true);
+                setWinner("bot");
+              }
+              return newHits;
+            });
+          }
+        );
+        setBotQueue([...updatedQueue]);
+        // Update the main state with the (potentially) mutated set from easyBotTurn
+        setHumanAttacked(easyAttackedSet); 
+        
+        // Update LEDs using the set AFTER easyBotTurn potentially modified it
+        updateLEDsAfterTurn(humanBoard, botBoard, easyAttackedSet, currentBotAttacked);
+        
+        // Easy mode - go again if hit
+        if (hitShip && !gameOver) {
+          console.log("Easy bot hit a ship, going again after delay");
+          // Pass the LATEST botAttacked and the UPDATED humanAttacked set (easyAttackedSet)
+          setTimeout(() => botTurn(currentBotAttacked, easyAttackedSet), 1000);
+        } else {
+          console.log("Bot turn complete, returning control to player");
+          setIsHumanTurn(true);
+        }
+      } catch (error) {
+        console.error("Error in easy bot turn:", error);
+        setIsHumanTurn(true); // Safety fallback
+      }
     }
   };
 
@@ -613,33 +653,26 @@ const GamePage = () => {
   // Difficulty selection screen
   if (!difficulty) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="bg-gray-800 text-white p-6 rounded-lg text-center shadow-lg">
-          <h1 className="text-2xl font-bold mb-4">Play New Game</h1>
-          <div className="grid grid-cols-3 gap-4">
-            <button
-              className="px-5 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold"
-              onClick={() => setDifficulty("easy")}
-            >
-              Easy
-            </button>
-            <button
-              className="px-5 py-3 rounded-lg bg-yellow-500 hover:bg-yellow-600 text-white font-bold"
-              onClick={() => setDifficulty("medium")}
-            >
-              Normal
-            </button>
-            {/* this difficulty will not be played any more. 
-             <button
-              className="px-5 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold"
-              onClick={() => setDifficulty("hard")}
-            >
-              Hard
-            </button> */}
-          </div>
-        </div>
+  <div className="flex items-center justify-center h-screen bg-gray-100">
+    <div className="bg-gray-800 text-white p-8 rounded-xl text-center shadow-xl max-w-md w-full">
+      <h1 className="text-3xl font-extrabold mb-6">Play New Game</h1>
+      <div className="grid grid-cols-2 gap-6">
+        <button
+          className="w-full py-4 rounded-lg bg-green-500 hover:bg-green-600 transition"
+          onClick={() => setDifficulty("easy")}
+        >
+          Normal
+        </button>
+        <button
+          className="w-full py-4 rounded-lg bg-orange-500 hover:bg-orange-600 transition"
+          onClick={() => setDifficulty("medium")}
+        >
+          Hard
+        </button>
       </div>
-    );
+    </div>
+  </div>
+);
   }
 
 
