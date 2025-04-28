@@ -154,7 +154,7 @@ export function botTurn(
   console.log(`Bot attacking at ${pickX}, ${pickY}`);
   const result = humanBoard[pickY][pickX];
 
-  if (result === 1) {
+  if (result !== 0) {
     console.log(
       `Bot hit at ${pickX}, ${pickY}. Adding adjacent squares for future turns.`
     );

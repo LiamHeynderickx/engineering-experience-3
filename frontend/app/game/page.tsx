@@ -601,7 +601,7 @@ const GamePage = () => {
 
         {/* the 10 cells */}
         {rowArr.map((cellID, c) => {
-          const key     = `${r},${c}`;
+          const key     = `${c},${r}`;
           const attacked= humanAttacked.has(key);
           const isMiss  = attacked && cellID === 0;
           const isHit   = attacked && cellID !== 0;
