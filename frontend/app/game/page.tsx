@@ -5,6 +5,8 @@ import { botTurn as easyBotTurn } from "../../actions/functions";
 import { generateProbabilitiesForAllShips, generateNextMove } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
 import { updateLEDsAfterTurn } from "../../actions/connectionTCP";
+import { updateLEDsListening } from '../../actions/connectionTCP';
+
 
 declare global {
   interface Window {
@@ -90,6 +92,7 @@ const GamePage = () => {
     };
   
     recognizer.start();
+    updateLEDsListening();
   };
 
 

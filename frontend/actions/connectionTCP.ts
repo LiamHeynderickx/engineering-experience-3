@@ -10,7 +10,7 @@ export function generateLEDArray(humanBoard: (number | string)[][], botBoard: (n
       const key = `${col},${row}`; // key for tracking attacked cells
       
       if (humanAttacked.has(key)) {
-        if (humanBoard[row][col] === 1 || typeof humanBoard[row][col] === "string") {
+        if (humanBoard[row][col]  !== 0 || typeof humanBoard[row][col] === "string") {
           // Hit on the human's board (Boat hit)
           ledArray.push(2);
         } else {
@@ -77,4 +77,35 @@ export function updateLEDsAfterTurn(humanBoard: (number | string)[][], botBoard:
         });
 }
   
+// connectionTCP.ts
+
+/**
+ * Generate a 200-element array filled with 6 (yellow),
+ * to indicate “listening” feedback on all LEDs.
+ */
+export function generateListeningLEDArray(): number[] {
+  return Array(200).fill(6);
+}
+
+/**
+ * Send that “listening” array to the back end.
+ * Call this right when you kick off speech recognition.
+ */
+export function updateLEDsListening(): void {
+  const ledArray = generateListeningLEDArray();
+  console.log("Listening LED Array:", ledArray);
+
+  fetch('/api/sendLedData', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ledArray }),
+  })
+    .then(res => {
+      console.log('Listening LEDs sent, status', res.status);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    })
+    .then((data) => console.log('Response:', data.message))
+    .catch(err => console.error('Error sending listening LEDs:', err));
+}
   
