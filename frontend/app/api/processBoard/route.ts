@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     // Execute the Python script.
     const { stdout, stderr } = await execPromise(
-      `python3 "${scriptPath}" --image "${tempImagePath}"`
+      `python"${scriptPath}" --image "${tempImagePath}"`
     );
     if (stderr) {
       console.error('Python error:', stderr);

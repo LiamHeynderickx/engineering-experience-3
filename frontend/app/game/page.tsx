@@ -5,6 +5,8 @@ import { botTurn as easyBotTurn } from "../../actions/functions";
 import { generateProbabilitiesForAllShips, generateNextMove } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
 import { updateLEDsAfterTurn, updateLEDsListening, updateLEDsVictory, updateLEDsDefeat } from '../../actions/connectionTCP';
+import { createModel, KaldiRecognizer } from "vosk-browser";
+import { recordAudio, blobToDataURL } from '../../utils/audio'
 
 // Remove any previous conflicting declarations
 declare global {
@@ -51,7 +53,8 @@ const GamePage = () => {
   // For probability strategies (medium and hard)
   const [boardProbHits, setBoardProbHits] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
   const [boardProbMisses, setBoardProbMisses] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
-
+// Hold the Vosk recognizer
+const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
   // Speech recognition setup - keeping original implementation
   let recognizer: any = null;
   if (typeof window !== "undefined") {
@@ -130,7 +133,8 @@ const GamePage = () => {
       };
     }
   }, [difficulty, cameraImage, generateInitialBoard]);
-
+ 
+  
   // Function to reset LEDs explicitly
   const resetLEDs = () => {
     console.log('Explicitly resetting LEDs');
@@ -581,33 +585,45 @@ const GamePage = () => {
   };
   // temp code
   // Keep original voice attack handler
-  const handleVoiceAttack = () => {
-    if (!isHumanTurn || !recognizer || !difficulty || gameOver) return;
-  
-    recognizer.onstart = () => console.log("🎤 Listening for coordinate…");
-    // 2) use `any` for the event
-    recognizer.onresult = (evt: any) => {
-      const text = evt.results[0][0].transcript
-                    .trim()
-                    .toUpperCase()
-                    .replace(/\s+/g, "");
-      console.log("Heard:", text);
-      const m = text.match(/^([A-J])([1-9]|10)$/);
-      if (!m) {
-        return alert("Sorry, I didn't catch a valid cell (e.g. B7). Try again.");
-      }
-      const row = "ABCDEFGHIJ".indexOf(m[1]);
-      const col = parseInt(m[2], 10) - 1;
-      handleHumanClick(row, col);
-    };
-    recognizer.onerror = (e: any) => {
-      console.error("Speech error", e);
-      alert("Sorry, couldn't understand you. Please try again.");
-    };
-  
-    recognizer.start();
+  // at top of your component, after voskRec is set
+  // page.tsx (or wherever your handleVoiceAttack lives)
+  const handleVoiceAttack = async () => {
+    if (!isHumanTurn || gameOver) return;
     updateLEDsListening();
+  
+    try {
+      // record 3s
+      const blob = await recordAudio(3);
+      const dataUrl = await blobToDataURL(blob);
+  
+      // send to API
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioBlob: dataUrl })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const { text } = await res.json();
+      const coords = (text as string)
+      .toUpperCase()
+      .match(/([A-J])\s*(10|[1-9])/g);
+      console.log("Transcribed:", coords)
+      if (!coords?.length) {
+        alert("Sorry, didn't catch a valid cell (e.g. A1). Try again.");
+        return;
+      }
+      const coord = coords[0].replace(/\s+/, "");
+      const row = "ABCDEFGHIJ".indexOf(coord[0]);
+      const col = parseInt(coord.slice(1), 10) - 1;
+      handleHumanClick(row, col);
+  
+    } catch (e: any) {
+      alert('Voice attack failed: ' + e.message);
+    }
   };
+  
+
+  
 
   // Start Game Section: Capture Image / Test Mode
   if (!gameStarted) {
