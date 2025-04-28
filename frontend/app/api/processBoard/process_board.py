@@ -103,101 +103,83 @@ grid = [[(col * cell_size, row * cell_size) for col in range(10)] for row in ran
 
 ####################### DETECT GRID AREA AND CREATE GRID #######################
 
-#convert warped image to HSV for green boat detection
+#convert warped image to HSV for black boat detection
 warped_hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
 
-#define the range for green boats (this may need to be changed depending on testing and we may change boat colour)
-lower_green = np.array([30, 80, 80])
-upper_green = np.array([90, 255, 255])
+#define the range for black boats (this may need to be changed depending on testing and we may change boat colour)
+lower_black = np.array([0, 0, 0])
+upper_black = np.array([180, 255, 120])
 
-# Create mask for green color
-green_mask = cv2.inRange(warped_hsv, lower_green, upper_green)
+# Create mask for black color
+black_mask = cv2.inRange(warped_hsv, lower_black, upper_black)
 
-# Find contours of green boats
-boat_contours, _ = cv2.findContours(green_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+# Find contours of black boats
+boat_contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 #if not boat_contours:
-    #print("No green boats detected!")
+    #print("No black boats detected!")
 
 #purely visual:
-# cv2.imshow("Board State", green_mask)
+# cv2.imshow("Board State", black_mask)
 # cv2.waitKey(4000)  #shows image briefly
 
-#now we have a mask that has 'highlighted' the green boats we need to determine the position and what grid it falls into
+# detect position of black boats
 
-for contour in boat_contours: #loop through all green objects 'boats' found
-    #get bouding box of contour (area boat covers) and calc centre
-    x, y, w, h = cv2.boundingRect(contour)
-    boat_center_x = x + w // 2
-    boat_center_y = y + h // 2
+# Perform connected components analysis to handle boats touching each other
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(black_mask, connectivity=8)
 
-    #store occupied grid cells
+threshold = 0.6
+cell_area = cell_size * cell_size
+
+for label in range(1, num_labels):  # Skip label 0 (background)
+    component_mask = (labels == label).astype("uint8") * 255
     occupied_cells = set()
 
-    #define a threshold (will need to be adjusted with testing)
-    threshold = 0.5
-    cell_area = cell_size * cell_size
-
-    #check which grid cells the boat occupies with majority overlap and
     for row in range(10):
         for col in range(10):
             cell_x, cell_y = grid[row][col]
+            cell_roi = component_mask[cell_y:cell_y+cell_size, cell_x:cell_x+cell_size]
 
-            #define the grid cell's boundaries (top-left and bottom-right corners)
-            cell_bottom_right_x = cell_x + cell_size
-            cell_bottom_right_y = cell_y + cell_size
+            overlap_area = cv2.countNonZero(cell_roi)
 
-            #calculate the overlap between the grid cell and the boat's bounding box
-            overlap_x1 = max(x, cell_x)
-            overlap_y1 = max(y, cell_y)
-            overlap_x2 = min(x + w, cell_bottom_right_x)
-            overlap_y2 = min(y + h, cell_bottom_right_y)
+            if overlap_area > threshold * cell_area:
+                occupied_cells.add((row, col))
 
-            #check if there's any overlap at all
-            if overlap_x2 > overlap_x1 and overlap_y2 > overlap_y1:
-                overlap_area = (overlap_x2 - overlap_x1) * (overlap_y2 - overlap_y1)
-                #if the overlap area is greater than the threshold, consider the grid cell occupied and add it to occupied cells
-                if overlap_area > threshold * cell_area:
-                    occupied_cells.add((row, col))
+    if occupied_cells:
+        boat_size = len(occupied_cells)
 
-    #if the boat is not on any grid cell it means its outside the range of the board so discard
-    if not occupied_cells:
-        #print(f"No grid cells occupied for boat at ({boat_center_x}, {boat_center_y}), boat out of board range")
-        continue
+        rows = [cell[0] for cell in occupied_cells]
+        cols = [cell[1] for cell in occupied_cells]
 
-    #get boat size and orientation
-    boat_size = len(occupied_cells)
-    min_row = min(cell[0] for cell in occupied_cells)
-    max_row = max(cell[0] for cell in occupied_cells)
-    min_col = min(cell[1] for cell in occupied_cells)
-    max_col = max(cell[1] for cell in occupied_cells)
+        boat_width = max(cols) - min(cols) + 1
+        boat_height = max(rows) - min(rows) + 1
 
-    boat_width = max_col - min_col + 1
-    boat_height = max_row - min_row + 1
+        if boat_width > boat_height:
+            orientation = "Horizontal"
+        elif boat_height > boat_width:
+            orientation = "Vertical"
+        else:
+            orientation = "Single Cell"
 
-    if boat_width > boat_height:
-        orientation = "Horizontal"
-    elif boat_height > boat_width:
-        orientation = "Vertical"
-    else:
-        orientation = "Unknown"
+        # print(f"Boat at grid cells: {occupied_cells}")
+        # print(f"Boat size: {boat_size} grid cells")
+        # print(f"Boat orientation: {orientation}")
 
-    #print info, will later be sent to game logic. (THIS IS THE OUTPUT WE NEED)
-    # print(f"Boat at grid cells: {occupied_cells}")
-    # print(f"Boat size: {boat_size} grid cells")
-    # print(f"Boat orientation: {orientation}")
+        # Optional visualization:
+        for cell in occupied_cells:
+            top_left = (grid[cell[0]][cell[1]][0], grid[cell[0]][cell[1]][1])
+            bottom_right = (top_left[0] + cell_size, top_left[1] + cell_size)
+            cv2.rectangle(warped, top_left, bottom_right, (255, 0, 0), 2)
 
-    #the code below is purely for visualisation and will not be functional in the final design
-    # cv2.rectangle(warped, (x, y), (x + w, y + h), (255, 0, 0), 2)
-    # cv2.putText(warped, f"{boat_size} cells", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-    # cv2.putText(warped, orientation, (x, y - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+            # populate json
+            boats_data.append({
+                "occupied_cells": sorted(list(occupied_cells)),  # sort for readability
+                "size": boat_size,
+                "orientation": orientation
+            })
 
-    # populate json
-    boats_data.append({
-        "occupied_cells": sorted(list(occupied_cells)),  # sort for readability
-        "size": boat_size,
-        "orientation": orientation
-    })
+
+
 
 output = {"boats": boats_data}
 print(json.dumps(output, indent=4))
