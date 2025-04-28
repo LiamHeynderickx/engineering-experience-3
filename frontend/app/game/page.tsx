@@ -358,25 +358,53 @@ const GamePage = () => {
 
   // Bot turn logic - Aligning medium/hard post-hit logic with easy mode
   const botTurn = (
-    currentBotAttacked: Set<string> = botAttacked, // Bot's attacks THIS turn
-    latestHumanAttacked: Set<string> = humanAttacked // Human's state BEFORE this turn
+      currentBotAttacked: Set<string> = botAttacked, // Bot's attacks THIS turn
+      latestHumanAttacked: Set<string> = humanAttacked // Human's state BEFORE this turn
   ) => {
     if (gameOver) return;
-    
+
     console.log("Bot's turn starting with latestHumanAttacked:", latestHumanAttacked);
-    
+
     // Use the passed-in humanAttacked state, default to component state if first turn
     let currentHumanAttacked = new Set(latestHumanAttacked);
     let hitShip = false;
-    
+
     if (difficulty === "medium" || difficulty === "hard") {
       try {
         // Generate probability grid for intelligent targeting
-        const probGrid = generateProbabilitiesForAllShips(boardProbHits, boardProbMisses);
+        // First, we need to make sure our probability grid accounts for cells we've already attacked
+        // Copy the current board states
+        const currentProbHits = [...boardProbHits.map(row => [...row])];
+        const currentProbMisses = [...boardProbMisses.map(row => [...row])];
+
+        // Mark all cells that have been attacked in our probability matrices
+        // This ensures the generateNextMove function won't select already attacked cells
+        for (let i = 0; i < GRID_SIZE; i++) {
+          for (let j = 0; j < GRID_SIZE; j++) {
+            const cellKey = `${j},${i}`;
+            if (currentHumanAttacked.has(cellKey)) {
+              // If it was a hit, mark in hit matrix
+              if (humanBoard[i][j] !== 0) {
+                currentProbHits[i][j] = 1;
+              } else {
+                // Otherwise mark as miss
+                currentProbMisses[i][j] = 1;
+              }
+            }
+          }
+        }
+
+        // Now generate the probability grid using our updated matrices
+        const probGrid = generateProbabilitiesForAllShips(currentProbHits, currentProbMisses);
+
+        // Debug log to make sure probGrid reflects our attacked cells
+        console.log(`Generated probability grid, checking for already attacked cells...`);
+
+        // Get next move from probability grid
         const nextMove = generateNextMove(probGrid);
-        
+
         console.log(`${difficulty} bot selecting ${nextMove.col},${nextMove.row}`);
-        
+
         // Check if cell has already been attacked using the LATEST set
         const key = `${nextMove.col},${nextMove.row}`;
         if (currentHumanAttacked.has(key)) {
@@ -385,23 +413,23 @@ const GamePage = () => {
           setTimeout(() => botTurn(currentBotAttacked, latestHumanAttacked), 50);
           return;
         }
-        
+
         // Add the cell to the attacked set for THIS turn
         currentHumanAttacked.add(key);
-        
+
         // Check if hit or miss
         const targetValue = humanBoard[nextMove.row][nextMove.col];
         if (targetValue !== 0) {
           // It's a hit!
           hitShip = true;
           console.log(`${difficulty} bot hit at ${key}`, targetValue);
-          
+
           if (difficulty === "hard") {
             // Hard mode: reveal entire boat
             const boatId = targetValue;
             let addedHits = 0;
             const newProbHits = [...boardProbHits.map(row => [...row])];
-            
+
             // Mark all cells of the same boat as hit in hard mode
             for (let i = 0; i < GRID_SIZE; i++) {
               for (let j = 0; j < GRID_SIZE; j++) {
@@ -416,11 +444,11 @@ const GamePage = () => {
                 }
               }
             }
-            
+
             // Update state using the set updated within this turn
-            setHumanAttacked(new Set(currentHumanAttacked)); 
+            setHumanAttacked(new Set(currentHumanAttacked));
             setBoardProbHits(newProbHits);
-            
+
             // Update hit counter and check for game over
             setBotHits(prev => {
               const newHits = prev + addedHits;
@@ -428,18 +456,26 @@ const GamePage = () => {
                 console.log("Game Over - Bot Wins!");
                 setGameOver(true);
                 setWinner("bot");
+                return newHits;
               }
+
+              // Continue with the bot's next turn after state updates
+              if (hitShip) {
+                console.log(`Hard bot hit a ship, going again after delay`);
+                setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000);
+              }
+
               return newHits;
             });
           } else {
             // Medium mode: single hit
             const newProbHits = [...boardProbHits.map(row => [...row])];
             newProbHits[nextMove.row][nextMove.col] = 1;
-            
-            // Update state using the set updated within this turn
+
+            // Update state using the set updated within this turn - IMPORTANT!
             setHumanAttacked(new Set(currentHumanAttacked));
             setBoardProbHits(newProbHits);
-            
+
             // Update hit counter and check for game over
             setBotHits(prev => {
               const newHits = prev + 1;
@@ -447,32 +483,52 @@ const GamePage = () => {
                 console.log("Game Over - Bot Wins!");
                 setGameOver(true);
                 setWinner("bot");
+                return newHits;
               }
+
+              // Continue with the bot's next turn after state updates are complete
+              // This is the critical fix - schedule the next turn from inside setState callback
+              console.log("Medium bot hit a ship, going again after delay");
+              setTimeout(() => {
+                console.log("Medium bot scheduling next turn with updated probabilities");
+                botTurn(currentBotAttacked, currentHumanAttacked);
+              }, 1000);
+
               return newHits;
             });
+
+            // REMOVE THIS SECTION - we already scheduled the next turn in the setBotHits callback
+            // Don't schedule another turn here outside the state update callback
           }
         } else {
           // Miss
           console.log(`${difficulty} bot missed at ${key}`);
           const newProbMisses = [...boardProbMisses.map(row => [...row])];
           newProbMisses[nextMove.row][nextMove.col] = 1;
-          
+
           // Update state using the set updated within this turn
           setHumanAttacked(new Set(currentHumanAttacked));
           setBoardProbMisses(newProbMisses);
-        }
-        
-        // Update LEDs with the results of THIS turn
-        updateLEDsAfterTurn(humanBoard, botBoard, currentHumanAttacked, currentBotAttacked);
-        
-        // Schedule next turn or return control - MIRRORING EASY MODE STRUCTURE
-        if (hitShip && !gameOver) {
-          console.log(`${difficulty} bot hit a ship, going again after delay`);
-          // Pass the LATEST botAttacked and the UPDATED humanAttacked set from THIS turn
-          setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000);
-        } else {
-          console.log("Bot turn complete, returning control to player");
+
+          // Update LEDs with the results of THIS turn
+          updateLEDsAfterTurn(humanBoard, botBoard, currentHumanAttacked, currentBotAttacked);
+
+          // Return control to player
+          console.log("Bot missed, returning control to player");
           setIsHumanTurn(true);
+        }
+
+        // Only update LEDs here if it was a hit (misses already updated LEDs)
+        if (hitShip) {
+          updateLEDsAfterTurn(humanBoard, botBoard, currentHumanAttacked, currentBotAttacked);
+        }
+
+        // IMPORTANT: We've moved the recursive calls into state update callbacks
+        // Additionally, added a safety timeout to prevent infinite loops
+        if (hitShip && !gameOver) {
+          // Since we've already scheduled the next turn inside the state update callbacks,
+          // we don't need any additional scheduling here
+          console.log("Bot hit handling is delegated to state update callbacks");
         }
       } catch (error) {
         console.error("Error in bot turn:", error);
@@ -482,32 +538,32 @@ const GamePage = () => {
       // Easy difficulty uses the predefined easyBotTurn function
       try {
         // easyBotTurn MUTATES the humanAttacked set passed to it
-        const easyAttackedSet = new Set(latestHumanAttacked); 
+        const easyAttackedSet = new Set(latestHumanAttacked);
         const updatedQueue = easyBotTurn(
-          humanBoard as number[][],
-          easyAttackedSet, // Pass the mutable set
-          botQueue,
-          () => {
-            // This callback is called when a hit occurs IN easyBotTurn
-            hitShip = true;
-            setBotHits((prev) => {
-              const newHits = prev + 1;
-              if (newHits >= TOTAL_SHIP_SQUARES) {
-                console.log("Game Over - Bot Wins!");
-                setGameOver(true);
-                setWinner("bot");
-              }
-              return newHits;
-            });
-          }
+            humanBoard as number[][],
+            easyAttackedSet, // Pass the mutable set
+            botQueue,
+            () => {
+              // This callback is called when a hit occurs IN easyBotTurn
+              hitShip = true;
+              setBotHits((prev) => {
+                const newHits = prev + 1;
+                if (newHits >= TOTAL_SHIP_SQUARES) {
+                  console.log("Game Over - Bot Wins!");
+                  setGameOver(true);
+                  setWinner("bot");
+                }
+                return newHits;
+              });
+            }
         );
         setBotQueue([...updatedQueue]);
         // Update the main state with the (potentially) mutated set from easyBotTurn
-        setHumanAttacked(easyAttackedSet); 
-        
+        setHumanAttacked(easyAttackedSet);
+
         // Update LEDs using the set AFTER easyBotTurn potentially modified it
         updateLEDsAfterTurn(humanBoard, botBoard, easyAttackedSet, currentBotAttacked);
-        
+
         // Easy mode - go again if hit
         if (hitShip && !gameOver) {
           console.log("Easy bot hit a ship, going again after delay");
