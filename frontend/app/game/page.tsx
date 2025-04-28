@@ -579,7 +579,7 @@ const GamePage = () => {
       }
     }
   };
-
+  // temp code
   // Keep original voice attack handler
   const handleVoiceAttack = () => {
     if (!isHumanTurn || !recognizer || !difficulty || gameOver) return;
