@@ -81,14 +81,14 @@ export function updateLEDsAfterTurn(humanBoard: (number | string)[][], botBoard:
 
 /**
  * Generate a 200-element array filled with 6 (yellow),
- * to indicate “listening” feedback on all LEDs.
+ * to indicate "listening" feedback on all LEDs.
  */
 export function generateListeningLEDArray(): number[] {
   return Array(200).fill(6);
 }
 
 /**
- * Send that “listening” array to the back end.
+ * Send that "listening" array to the back end.
  * Call this right when you kick off speech recognition.
  */
 export function updateLEDsListening(): void {
