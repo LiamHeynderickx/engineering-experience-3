@@ -534,23 +534,22 @@ const GamePage = () => {
           </div>
         )}
 
-        {/* HIT: red drop + smoke */}
+        {/* HIT: green drop + smoke */}
         {isHit && (
-          <>
-            <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ animation: "drop 0.3s ease-out forwards" }}
-            >
-              <div className="w-6 h-6 rounded-full bg-green-500" />
-            </div>
-            <div
-              className="absolute inset-0 flex items-center justify-center pointer-events-none"
-              style={{ animation: "smoke 10.6s ease-out forwards" }}
-            >
-              <div className="w-4 h-4 bg-gray-300 rounded-full opacity-50" />
-            </div>
-          </>
-        )}
+  <>
+    {/* green drop */}
+    <div
+      className="absolute inset-0 flex items-center justify-center"
+      style={{ animation: "drop 0.3s ease-out forwards" }}
+    >
+      <div className="w-6 h-6 rounded-full bg-green-500" />
+    </div>
+
+    {/* smoke overlay */}
+    <div className="smoke pointer-events-none" />
+  </>
+)}
+
       </div>
     );
   })

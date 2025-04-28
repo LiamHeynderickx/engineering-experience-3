@@ -1,4 +1,5 @@
 import '.././styles/globals.css'
+import '.././styles/animations.css'
 import Header from './HomeComponents/header'
 import Footer from './HomeComponents/footer';
 import { Inter } from "next/font/google";

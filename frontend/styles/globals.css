@@ -19,3 +19,28 @@
     to   { opacity: 1; transform: scale(1); }
   }
   
+  .smoke-video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .smoke {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url("/noise1.jpg"), url("/noise2.jpg");
+    background-blend-mode: difference, normal;
+    background-repeat: no-repeat, no-repeat;
+    background-size: cover, cover;
+    animation: sliding 4s linear 1 forwards;
+  }
+  
+  @keyframes sliding {
+    from { background-position: 1024px 4096px, 0 3072px; }
+    to   { background-position: 0 0,       1024px 0;   }
+  }
