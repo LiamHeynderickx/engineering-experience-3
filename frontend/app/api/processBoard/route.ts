@@ -78,16 +78,24 @@ interface BoatsData {
  * @param data BoatsData containing boats with occupied cells
  * @returns A 10×10 number matrix
  */
+/**
+ * Translates the detected boats JSON into a 10×10 matrix
+ * with distinct IDs for each boat.
+ * @param data BoatsData containing boats with occupied cells
+ * @returns A 10×10 number matrix, where 0 = empty, 1 = boat #1, 2 = boat #2, …
+ */
 function boatsToMatrix(data: BoatsData): number[][] {
   // Initialize a 10×10 grid of zeros
   const grid: number[][] = Array.from({ length: 10 }, () => Array(10).fill(0));
 
-  data.boats.forEach((boat: Boat) => {
-    boat.occupied_cells.forEach(([row, col]: [number, number]) => {
+  data.boats.forEach((boat: Boat, idx: number) => {
+    // give this boat an ID of (idx + 1)
+    const id = idx + 1;
+    boat.occupied_cells.forEach(([row, col]) => {
       if (row >= 0 && row < 10 && col >= 0 && col < 10) {
-        grid[row][col] = 1;
+        grid[row][col] = id;
       } else {
-        console.warn(`Boat cell [${row},${col}] is out of bounds and will be ignored.`);
+        console.warn(`Boat cell [${row},${col}] out of bounds`);
       }
     });
   });

@@ -80,8 +80,8 @@ const GamePage = () => {
       if (!m) {
         return alert("Sorry, I didn’t catch a valid cell (e.g. B7). Try again.");
       }
-      const col = "ABCDEFGHIJ".indexOf(m[1]);
-      const row = parseInt(m[2], 10) - 1;
+      const row = "ABCDEFGHIJ".indexOf(m[1]);
+      const col = parseInt(m[2], 10) - 1;
       handleHumanClick(row, col);
     };
     recognizer.onerror = (e: any) => {
@@ -452,12 +452,13 @@ const GamePage = () => {
             >
               Normal
             </button>
-            <button
+            {/* this difficulty will not be played any more. 
+             <button
               className="px-5 py-3 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold"
               onClick={() => setDifficulty("hard")}
             >
               Hard
-            </button>
+            </button> */}
           </div>
         </div>
       </div>
@@ -505,86 +506,197 @@ const GamePage = () => {
       </div>
 
       <div className="flex gap-6">
-        {/* Enemy board */}
-        <div className="p-2 bg-gradient-to-b from-blue-800 to-blue-600 rounded-lg shadow-xl">
-          <h2 className="text-white text-lg mb-2 text-center">
-            Enemy Waters
-          </h2>
-          <div className="grid grid-cols-10 gap-0.5 bg-black p-2 rounded-lg">
-          {botGrid.map((row, r) =>
-  row.map((cell, c) => {
-    const key     = `${c},${r}`;
-    const isHit   = cell === "green";
-    const isMiss  = cell === "red";
-    const attacked = botAttacked.has(key);
-
-    return (
+      {/* Enemy board with headers */}
+<div className="p-2 bg-gradient-to-b from-blue-800 to-blue-600 rounded-lg shadow-xl">
+  <h2 className="text-white text-lg mb-2 text-center">Enemy Waters</h2>
+  <div className="grid grid-cols-11 gap-0.5 bg-blue-1000 p-2 rounded-lg">
+    {/* top-left blank corner */}
+    <div className="w-10 h-10"></div>
+    {/* column digits */}
+    {["1","2","3","4","5","6","7","8","9","10"].map((letter) => (
       <div
-        key={key}
-        className="relative w-10 h-10 rounded-lg bg-blue-500"
-        onClick={() => !attacked && handleHumanClick(r, c)}
+        key={letter}
+        className="w-10 h-10 flex items-center justify-center text-white font-bold"
       >
-        {/* MISS: white X */}
-        {isMiss && (
-          <div
-            className="absolute inset-0 flex items-center justify-center text-white text-2xl"
-            style={{ animation: "fadeIn 0.25s ease-out forwards" }}
-          >
-            ✕
-          </div>
-        )}
-
-        {/* HIT: green drop + smoke */}
-        {isHit && (
-  <>
-    {/* green drop */}
-    <div
-      className="absolute inset-0 flex items-center justify-center"
-      style={{ animation: "drop 0.3s ease-out forwards" }}
-    >
-      <div className="w-6 h-6 rounded-full bg-green-500" />
-    </div>
-
-    {/* smoke overlay */}
-    <div className="smoke pointer-events-none" />
-  </>
-)}
-
+        {letter}
       </div>
-    );
-  })
-)}
+    ))}
 
-          </div>
+    {/* now each row: first the row number, then 10 cells */}
+    {botGrid.map((row, r) => (
+      <React.Fragment key={r}>
+        {/* row label */}
+        <div className="w-10 h-10 flex items-center justify-center text-white font-bold">
+        {String.fromCharCode(65 + r)}
+        </div>
+        {/* each cell */}
+        {row.map((cell, c) => {
+          const key = `${c},${r}`;
+          const isHit = cell === "green";
+          const isMiss = cell === "red";
+          const attacked = botAttacked.has(key);
+          return (
+            <div
+              key={key}
+              className="relative w-10 h-10 rounded-lg bg-sky-400"
+              onClick={() => !attacked && handleHumanClick(r, c)}
+            >
+              {/* miss X */}
+              {isMiss && (
+                <div
+                  className="absolute inset-0 flex items-center justify-center text-white text-2xl animate-fadeIn"
+                >
+                  ✕
+                </div>
+              )}
+              {/* hit drop + smoke */}
+              {isHit && (
+                <>
+                  <div className="absolute inset-0 flex items-center justify-center animate-drop">
+                    <div className="w-6 h-6 rounded-full bg-green-500" />
+                  </div>
+                  <div className="smoke-effect">
+                    <div className="smoke smoke-1"></div>
+                    <div className="smoke smoke-2"></div>
+                    <div className="smoke smoke-3"></div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </React.Fragment>
+    ))}
+  </div>
+</div>
+{/* Your Waters */}
+<div className="p-2 bg-gradient-to-b from-red-800 to-red-600 rounded-lg shadow-xl">
+  <h2 className="text-white text-lg mb-2 text-center">Your Waters</h2>
+
+  {/* 11-col grid: corner + A–J, then 1–10 down the side */}
+  <div className="grid grid-cols-11 gap-1 bg-gradient-to-b from-red-800 to-red-600 p-2 rounded-lg">
+    {/* top-left blank */}
+    <div className="w-10 h-10" />
+
+    {/* top headers: A–J */}
+    {["1","2","3","4","5","6","7","8","9","10"].map((letter) => (
+      <div
+        key={letter}
+        className="w-10 h-10 flex items-center justify-center text-white font-bold"
+      >
+        {letter}
+      </div>
+    ))}
+
+    {/* rows */}
+    {humanBoard.map((rowArr, r) => (
+      <React.Fragment key={`row-${r}`}>
+        {/* side header: 1–10 */}
+        <div className="w-10 h-10 flex items-center justify-center text-white font-bold">
+        {String.fromCharCode(65 + r)}
         </div>
 
-        {/* Your board */}
-        <div className="p-2 bg-gradient-to-b from-red-800 to-red-600 rounded-lg shadow-xl">
-          <h2 className="text-white text-lg mb-2 text-center">
-            Your Waters
-          </h2>
-          <div className="grid grid-cols-10 gap-0.5 bg-black p-2 rounded-lg">
-            {humanBoard.map((row, r) =>
-              row.map((cell, c) => {
-                const key = `${c},${r}`;
-                const attacked = humanAttacked.has(key);
-                const color = attacked
-                  ? cell !== 0
-                    ? "bg-green-500"
-                    : "bg-red-500"
-                  : "bg-blue-500";
-                return (
-                  <div
-                    key={key}
-                    className={`w-10 h-10 rounded-lg ${
-                      attacked ? "opacity-100" : "opacity-80"
-                    } ${color}`}
-                  />
-                );
-              })
-            )}
-          </div>
-        </div>
+        {/* the 10 cells */}
+        {rowArr.map((cellID, c) => {
+          const key     = `${r},${c}`;
+          const attacked= humanAttacked.has(key);
+          const isMiss  = attacked && cellID === 0;
+          const isHit   = attacked && cellID !== 0;
+
+          // ship-segment shape logic (same as before)…
+          let shapeClass = "";
+          if (cellID !== 0) {
+            const up    = r > 0    && humanBoard[r-1][c] === cellID;
+            const down  = r < 9    && humanBoard[r+1][c] === cellID;
+            const left  = c > 0    && humanBoard[r][c-1] === cellID;
+            const right = c < 9    && humanBoard[r][c+1] === cellID;
+            const horiz = left || right;
+
+            let pos: "single"|"start"|"middle"|"end";
+            if (!up && !down && !left && !right)            pos="single";
+            else if (horiz) {
+              if (!left)      pos="start";
+              else if (!right)pos="end";
+              else            pos="middle";
+            } else {
+              if (!up)        pos="start";
+              else if (!down) pos="end";
+              else            pos="middle";
+            }
+
+            if (pos==="single")         shapeClass="ship-single";
+            else if (horiz) {
+              if (pos==="start")         shapeClass="ship-bow-horizontal";
+              else if (pos==="end")      shapeClass="ship-stern-horizontal";
+              else                        shapeClass="ship-middle-horizontal";
+            } else {
+              if (pos==="start")         shapeClass="ship-bow-vertical";
+              else if (pos==="end")      shapeClass="ship-stern-vertical";
+              else                        shapeClass="ship-middle-vertical";
+            }
+          }
+
+          // flex alignment so bow/stern hug edges
+          const wrapperFlex = (() => {
+            if (shapeClass.includes("horizontal")) {
+              if (shapeClass.includes("bow"))   return "justify-start items-center";
+              if (shapeClass.includes("stern")) return "justify-end items-center";
+              return "justify-center items-center";
+            } else if (shapeClass.includes("vertical")) {
+              if (shapeClass.includes("bow"))   return "items-start justify-center";
+              if (shapeClass.includes("stern")) return "items-end justify-center";
+              return "items-center justify-center";
+            }
+            return "justify-center items-center";
+          })();
+
+          return (
+            <div key={key} className="relative w-10 h-10">
+              {/* base water */}
+              <div className="absolute inset-0 bg-blue-500 rounded-lg" />
+
+              {/* ship (always visible) */}
+              {cellID !== 0 && (
+                <div className={`absolute inset-0 flex ${wrapperFlex}`}>
+                  <div className={`ship-part ${shapeClass} bg-black`} />
+                </div>
+              )}
+
+              {/* miss X */}
+              {isMiss && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg width="22" height="22" viewBox="0 0 22 22" className="miss-x">
+                    <line x1="4" y1="4" x2="18" y2="18" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+                    <line x1="18" y1="4" x2="4" y2="18" stroke="white" strokeWidth="3" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              )}
+
+              {/* hit drop + smoke */}
+              {isHit && (
+                <>
+                  <div className="absolute inset-0 flex items-center justify-center animate-drop">
+                    <div className="w-6 h-6 rounded-full bg-red-500" />
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="smoke-effect">
+                      <div className="smoke smoke-1"/>
+                      <div className="smoke smoke-2"/>
+                      <div className="smoke smoke-3"/>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </React.Fragment>
+    ))}
+  </div>
+</div>
+
+
+
       </div>
 
       <div className="mt-4 text-center">
