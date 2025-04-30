@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import net from 'net';
 
-const ESP32_IP = '192.168.4.1';  // Replace with your ESP32 IP address
+const ESP32_IP = '192.168.207.221';  // Replace with your ESP32 IP address
 const ESP32_PORT = 8080;         // Replace with your ESP32 listening port
 
 let espClient: net.Socket | null = null;

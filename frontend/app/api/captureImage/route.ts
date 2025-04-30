@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import net from "net";
 
-const ESP32_IP = "192.168.4.1";  // Your ESP32 IP
+const ESP32_IP = "192.168.207.221";  // Your ESP32 IP
 const ESP32_PORT = 8080;         // Your ESP32 TCP port
 
 export const runtime = "nodejs";

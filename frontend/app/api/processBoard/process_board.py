@@ -8,12 +8,8 @@ parser = argparse.ArgumentParser(description="Process board image to JSON")
 parser.add_argument("--image", required=True, help="Path to input image")
 args = parser.parse_args()
 
-imageName = args.image
+imageName = args.image  # Use the image path provided
 image = cv2.imread(imageName)
-if image is None:
-    print(json.dumps({"error": f"Could not read image: {imageName}"}))
-    exit()
-
 image = cv2.flip(image, 1)
 
 boats_data = []
@@ -29,230 +25,164 @@ boats_data = []
 # Convert to HSV
 hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-# Define red ranges for corner detection (adjust if needed)
-lower_red_1 = np.array([0, 80, 80])
+# Detect corners of board (red, may change)
+# this defines the range for red we are searching for
+#test pics in GT to see how the lighting affects the performance.
+lower_red_1 = np.array([0, 50, 50])
 upper_red_1 = np.array([15, 255, 255])
-lower_red_2 = np.array([150, 80, 80])
+
+lower_red_2 = np.array([160, 50, 50])
 upper_red_2 = np.array([180, 255, 255])
 
-# Create mask for red corners
+#red has 2 colour ranges so we create a mask for both
+# mask sets all red pixels to white and all other pixels to black (0)
 mask1 = cv2.inRange(hsv, lower_red_1, upper_red_1)
 mask2 = cv2.inRange(hsv, lower_red_2, upper_red_2)
-mask = cv2.bitwise_or(mask1, mask2)
+mask = cv2.bitwise_or(mask1, mask2) #OR combines masks
+contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #finds boundaries of regions in mask
 
-# Find contours of red corners
-contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+#purely visual:
+# cv2.imshow("Board State", mask)
+# cv2.waitKey(2000)  #shows image briefly
 
-# Get center coordinates of red corners
+#get central coordinates of red regions, these will be used as corners of the grid.
 coordinates = []
 for contour in contours:
-    if cv2.contourArea(contour) > 10:
+    if cv2.contourArea(contour) > 15:  # Ignore small red areas (adjust according to more testing)
         M = cv2.moments(contour)
         if M["m00"] != 0:
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
             coordinates.append((cx, cy))
+            #print(cx, cy)
 
-# Check if we found 4 corners
-if len(coordinates) != 4:
-    print(json.dumps({"error": f"Expected 4 red corners, but found {len(coordinates)}"}))
-    exit()
+# # Sort the corners (Top-left, Top-right, Bottom-right, Bottom-left)
+# coordinates = sorted(coordinates, key=lambda p: (p[1], p[0]))  # Sort by Y, then X
+# if len(coordinates) != 4:
+#     raise ValueError("Could not detect 4 red corner points!")
+# print(coordinates)
+#
+# #now we have 4 sorted points that can be used as the corners of the grid.
+#
+# #define the ideal grid corner positions
+width, height = 500, 500  #defines fixed board size. (not sure if this is ideal but let's see)
+# ideal_corners = np.float32([[0, 0], [width, 0], [width, height], [0, height]]) #standard corner pos
+# actual_corners = np.float32(coordinates)
+#
+# #Map the actual corners on to the ideal corners (perspective transformation matrix)
+# matrix = cv2.getPerspectiveTransform(actual_corners, ideal_corners)
+# warped = cv2.warpPerspective(image, matrix, (width, height))
 
-# Order the corners: TL, TR, BR, BL
 pts = np.array(coordinates, dtype="float32")
+
+# the idea: sum and diff of (x,y) give you unique signatures
 s = pts.sum(axis=1)
 diff = np.diff(pts, axis=1)
-ordered = np.zeros((4, 2), dtype="float32")
-ordered[0] = pts[np.argmin(s)]      # Top-left
-ordered[2] = pts[np.argmax(s)]      # Bottom-right
-ordered[1] = pts[np.argmin(diff)]   # Top-right
-ordered[3] = pts[np.argmax(diff)]   # Bottom-left
 
-# Warp the perspective
-width, height = 500, 500
-ideal = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
+ordered = np.zeros((4,2), dtype="float32")
+ordered[0] = pts[np.argmin(s)]       # top-left  has smallest  x+y
+ordered[2] = pts[np.argmax(s)]       # bot-right has largest   x+y
+ordered[1] = pts[np.argmin(diff)]    # top-right has smallest  x−y
+ordered[3] = pts[np.argmax(diff)]    # bot-left has largest   x−y
+
+ideal = np.float32([[0,0],
+                    [width,0],
+                    [width,height],
+                    [0,height]])
 M = cv2.getPerspectiveTransform(ordered, ideal)
 warped = cv2.warpPerspective(image, M, (width, height))
 
-# Calculate grid cell size and define grid coordinates
+
+#calc size of grid cell
 cell_size = width // 10
+
+#create 2D grid array with actual coordinates of the grid (used later to map where the boats are)
 grid = [[(col * cell_size, row * cell_size) for col in range(10)] for row in range(10)]
 
 # cv2.imshow("Board State", warped) #purely visualisation
 # cv2.waitKey(2000)  #shows image briefly
 
-####################### DETECT BOATS #######################
+####################### DETECT GRID AREA AND CREATE GRID #######################
 
-# Convert warped image to HSV for black boat detection
+#convert warped image to HSV for black boat detection
 warped_hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
 
-# Define range for black boats (adjust if needed)
+#define the range for black boats (this may need to be changed depending on testing and we may change boat colour)
 lower_black = np.array([0, 0, 0])
-upper_black = np.array([180, 255, 120]) # Increased upper brightness slightly
+upper_black = np.array([180, 255, 80])
 
 # Create mask for black color
 black_mask = cv2.inRange(warped_hsv, lower_black, upper_black)
 
-# Optional: Apply morphological operations to clean up mask
-kernel = np.ones((3,3), np.uint8)
-black_mask = cv2.morphologyEx(black_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-black_mask = cv2.morphologyEx(black_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+# Find contours of black boats
+boat_contours, _ = cv2.findContours(black_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-# Find all potentially occupied cells based on overlap
-threshold = 0.55 # Adjusted threshold slightly
+#if not boat_contours:
+    #print("No black boats detected!")
+
+#purely visual:
+# cv2.imshow("Board State", black_mask)
+# cv2.waitKey(4000)  #shows image briefly
+
+# detect position of black boats
+
+# Perform connected components analysis to handle boats touching each other
+num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(black_mask, connectivity=8)
+
+threshold = 0.6
 cell_area = cell_size * cell_size
-all_occupied_cells = set()
 
-for row in range(10):
-    for col in range(10):
-        cell_x, cell_y = grid[row][col]
-        cell_roi = black_mask[cell_y:cell_y+cell_size, cell_x:cell_x+cell_size]
-        overlap_area = cv2.countNonZero(cell_roi)
+for label in range(1, num_labels):  # Skip label 0 (background)
+    component_mask = (labels == label).astype("uint8") * 255
+    occupied_cells = set()
 
-        if overlap_area > threshold * cell_area:
-            all_occupied_cells.add((row, col))
+    for row in range(10):
+        for col in range(10):
+            cell_x, cell_y = grid[row][col]
+            cell_roi = component_mask[cell_y:cell_y+cell_size, cell_x:cell_x+cell_size]
 
-# --- Simplified Boat Finding Logic with Fallback ---
-expected_boat_sizes = [5, 4, 3, 3, 2]
-found_boats_details = []
-remaining_cells = all_occupied_cells.copy()
-found_boat_sizes = []
+            overlap_area = cv2.countNonZero(cell_roi)
+            
+            if overlap_area > threshold * cell_area:
+                occupied_cells.add((row, col))
 
-# Helper to check for contiguous cells
-def get_boat_cells(start_row, start_col, size, is_vertical):
-    cells = []
-    for i in range(size):
-        row = start_row + i if is_vertical else start_row
-        col = start_col if is_vertical else start_col + i
-        if 0 <= row < 10 and 0 <= col < 10:
-            cells.append((row, col))
+    if occupied_cells:
+        boat_size = len(occupied_cells)
+        
+        rows = [cell[0] for cell in occupied_cells]
+        cols = [cell[1] for cell in occupied_cells]
+
+        boat_width = max(cols) - min(cols) + 1
+        boat_height = max(rows) - min(rows) + 1
+        
+        if boat_width > boat_height:
+            orientation = "Horizontal"
+        elif boat_height > boat_width:
+            orientation = "Vertical"
         else:
-            return [] # Out of bounds
-    return cells
+            orientation = "Single Cell"
 
-# --- Pass 1: Greedy search for clear boat shapes ---
-def find_and_remove_boat(size, cells_pool):
-    # Try vertical first
-    for r in range(10 - size + 1):
-        for c in range(10):
-            potential_boat = get_boat_cells(r, c, size, is_vertical=True)
-            if potential_boat and all(cell in cells_pool for cell in potential_boat):
-                for cell in potential_boat:
-                    cells_pool.discard(cell)
-                return {"occupied_cells": sorted(potential_boat), "size": size, "orientation": "Vertical"}
-    # Try horizontal if no vertical found
-    for r in range(10):
-        for c in range(10 - size + 1):
-            potential_boat = get_boat_cells(r, c, size, is_vertical=False)
-            if potential_boat and all(cell in cells_pool for cell in potential_boat):
-                for cell in potential_boat:
-                    cells_pool.discard(cell)
-                return {"occupied_cells": sorted(potential_boat), "size": size, "orientation": "Horizontal"}
-    return None # No boat of this size found
+        # print(f"Boat at grid cells: {occupied_cells}")
+        # print(f"Boat size: {boat_size} grid cells")
+        # print(f"Boat orientation: {orientation}")
 
-# Try to find boats greedily, largest first
-temp_expected = sorted(expected_boat_sizes, reverse=True)
-for boat_size in temp_expected:
-    boat_info = find_and_remove_boat(boat_size, remaining_cells)
-    if boat_info:
-        found_boats_details.append(boat_info)
-        found_boat_sizes.append(boat_size)
+        # Optional visualization:
+        for cell in occupied_cells:
+            top_left = (grid[cell[0]][cell[1]][0], grid[cell[0]][cell[1]][1])
+            bottom_right = (top_left[0] + cell_size, top_left[1] + cell_size)
+            cv2.rectangle(warped, top_left, bottom_right, (255, 0, 0), 2)
 
-# --- Pass 2: Fallback for missing boats using remaining cells ---
-missing_boat_sizes = sorted(expected_boat_sizes, reverse=True)
-for size in found_boat_sizes:
-    if size in missing_boat_sizes:
-        missing_boat_sizes.remove(size)
-
-if missing_boat_sizes and remaining_cells:
-    # Try to form missing boats from remaining scattered cells
-    # This is a simple heuristic: group connected components
-    
-    # Group remaining cells into connected components (clusters)
-    clusters = []
-    visited = set()
-    temp_remaining = remaining_cells.copy()
-
-    while temp_remaining:
-        cluster = []
-        q = [temp_remaining.pop()] # Start BFS from an arbitrary cell
-        visited.add(q[0])
-        cluster.append(q[0])
-
-        head = 0
-        while head < len(q):
-            r, c = q[head]
-            head += 1
-            # Check neighbors (up, down, left, right)
-            for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
-                nr, nc = r + dr, c + dc
-                neighbor = (nr, nc)
-                if neighbor in remaining_cells and neighbor not in visited:
-                    visited.add(neighbor)
-                    q.append(neighbor)
-                    cluster.append(neighbor)
-                    temp_remaining.discard(neighbor) # Remove from pool
-        clusters.append(cluster)
-
-    # Try to assign clusters to missing boat sizes
-    clusters.sort(key=len, reverse=True) # Process larger clusters first
-    assigned_clusters = set()
-
-    for size_needed in sorted(missing_boat_sizes, reverse=True):
-        best_cluster_match = None
-        for i, cluster in enumerate(clusters):
-            if i not in assigned_clusters and len(cluster) >= size_needed: # Allow larger clusters for smaller boats
-                 # Basic check: If cluster size is close enough or larger
-                 # More sophisticated checks could be added (e.g., linearity)
-                 best_cluster_match = i
-                 break # Take the first suitable cluster
-
-        if best_cluster_match is not None:
-            cluster_cells = clusters[best_cluster_match]
-            assigned_clusters.add(best_cluster_match)
-            
-            # If cluster is larger than needed, take a subset (e.g., first 'size_needed' cells)
-            boat_cells = sorted(cluster_cells)[:size_needed]
-            
-            # Determine orientation based on bounding box of the chosen cells
-            rows = [cell[0] for cell in boat_cells]
-            cols = [cell[1] for cell in boat_cells]
-            orientation = "Vertical" if (max(rows) - min(rows) + 1) > (max(cols) - min(cols) + 1) else "Horizontal"
-            if len(rows) == 1 and len(cols) == 1: orientation = "Vertical" # Default for single cell
-
-            found_boats_details.append({
-                "occupied_cells": boat_cells,
-                "size": size_needed, # Report the size we NEEDED
+            # populate json
+            boats_data.append({
+                "occupied_cells": sorted(list(occupied_cells)),  # sort for readability
+                "size": boat_size,
                 "orientation": orientation
             })
-            # Remove these cells from the main remaining_cells set as well
-            for cell in boat_cells:
-                 remaining_cells.discard(cell)
-            missing_boat_sizes.remove(size_needed) # Mark this size as fulfilled
 
-# --- End Fallback Logic ---
 
-# Ensure exactly 5 boats are in the output, padding if necessary (last resort)
-final_boats_output = found_boats_details[:len(expected_boat_sizes)] # Take max 5 found
-num_found = len(final_boats_output)
-if num_found < len(expected_boat_sizes):
-     # Add dummy boats for any still missing - place them off-grid? Or first available?
-     # This indicates a significant detection failure.
-     still_missing_sizes = sorted(expected_boat_sizes, reverse=True)
-     for fb in final_boats_output:
-         if fb['size'] in still_missing_sizes:
-             still_missing_sizes.remove(fb['size'])
-     
-     # Add placeholder boats (e.g., at [-1,-1]) for missing sizes
-     for missing_size in still_missing_sizes:
-         final_boats_output.append({
-             "occupied_cells": [[-1, -1]] * missing_size, # Invalid cells
-             "size": missing_size,
-             "orientation": "Unknown"
-         })
+    
 
-# Prepare JSON output
-output = {"boats": final_boats_output}
+output = {"boats": boats_data}
 print(json.dumps(output, indent=4))
 
 ####################### DISPLAY IMAGE ANG GRID INFO #######################

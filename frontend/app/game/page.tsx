@@ -54,7 +54,7 @@ const GamePage = () => {
   const [boardProbHits, setBoardProbHits] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
   const [boardProbMisses, setBoardProbMisses] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
 // Hold the Vosk recognizer
-const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
+//const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
   // Speech recognition setup - keeping original implementation
   let recognizer: any = null;
   if (typeof window !== "undefined") {
@@ -66,6 +66,7 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
       recognizer.maxAlternatives = 1;
     }
   }
+
 
   // Function to generate board with memoization for performance
   const generateInitialBoard = useCallback((difficultyLevel: "easy" | "medium" | "hard") => {
@@ -83,19 +84,20 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
       setBotBoard(botBoard);
 
       // Process the captured image or fall back to random board
-      if (cameraImage) {
+      
+     /* if (cameraImage) {
         processCapturedImage(cameraImage)
           .then((matrix) => {
             if (!isMounted) return;
             if (Array.isArray(matrix)) {
               setHumanBoard(matrix);
               console.log("Processed Human Board:", matrix);
-            } else {
+            } else { 
               // Fallback if processing fails
               const human = generateInitialBoard(difficulty);
               setHumanBoard(human);
               console.log("Fallback Generated Human Board:", human);
-            }
+           }
           })
           .catch((err) => {
             if (!isMounted) return;
@@ -104,12 +106,12 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
             setHumanBoard(human);
             console.log("Fallback Generated Human Board:", human);
           });
-      } else {
+      } else {  */
         // If no image, fall back to generated board
         const human = generateInitialBoard(difficulty);
         setHumanBoard(human);
         console.log("Generated Human Board:", human);
-      }
+     // }
 
       // Reset displayed grid and game state
       setBotGrid(Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill("blue")));
@@ -366,7 +368,7 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
       latestHumanAttacked: Set<string> = humanAttacked // Human's state BEFORE this turn
   ) => {
     if (gameOver) return;
-
+    
     console.log("Bot's turn starting with latestHumanAttacked:", latestHumanAttacked);
 
     // Use the passed-in humanAttacked state, default to component state if first turn
@@ -455,13 +457,13 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
 
             // Update hit counter and check for game over
             setBotHits(prev => {
-              const newHits = prev + addedHits;
+               const newHits = prev + addedHits;
               if (newHits >= TOTAL_SHIP_SQUARES) {
                 console.log("Game Over - Bot Wins!");
                 setGameOver(true);
                 setWinner("bot");
                 return newHits;
-              }
+              } 
 
               // Continue with the bot's next turn after state updates
               if (hitShip) {
@@ -481,24 +483,22 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
             setBoardProbHits(newProbHits);
 
             // Update hit counter and check for game over
+            setHumanAttacked(new Set(currentHumanAttacked))
+            setBoardProbHits(newProbHits)
+
+            // now update the hit count *and* schedule the next turn *only once*
             setBotHits(prev => {
-              const newHits = prev + 1;
+              const newHits = prev + 1
               if (newHits >= TOTAL_SHIP_SQUARES) {
-                console.log("Game Over - Bot Wins!");
-                setGameOver(true);
-                setWinner("bot");
-                return newHits;
+                setGameOver(true)
+                setWinner("bot")
+              } else {
+                // **only** place we schedule the next botTurn
+                setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000)
+                console.log("Recursive called, botHits are now:", newHits, " while old hits are ", prev)
+
               }
-
-              // Continue with the bot's next turn after state updates are complete
-              // This is the critical fix - schedule the next turn from inside setState callback
-              console.log("Medium bot hit a ship, going again after delay");
-              setTimeout(() => {
-                console.log("Medium bot scheduling next turn with updated probabilities");
-                botTurn(currentBotAttacked, currentHumanAttacked);
-              }, 1000);
-
-              return newHits;
+              return newHits
             });
 
             // REMOVE THIS SECTION - we already scheduled the next turn in the setBotHits callback
@@ -587,40 +587,34 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
   // Keep original voice attack handler
   // at top of your component, after voskRec is set
   // page.tsx (or wherever your handleVoiceAttack lives)
-  const handleVoiceAttack = async () => {
-    if (!isHumanTurn || gameOver) return;
+  //the correct handleVoiceAttack
+  const handleVoiceAttack = () => {
+    if (!isHumanTurn || !recognizer || !difficulty || gameOver) return;
     updateLEDsListening();
   
-    try {
-      // record 3s
-      const blob = await recordAudio(3);
-      const dataUrl = await blobToDataURL(blob);
-  
-      // send to API
-      const res = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioBlob: dataUrl })
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const { text } = await res.json();
-      const coords = (text as string)
-      .toUpperCase()
-      .match(/([A-J])\s*(10|[1-9])/g);
-      console.log("Transcribed:", coords)
-      if (!coords?.length) {
-        alert("Sorry, didn't catch a valid cell (e.g. A1). Try again.");
-        return;
+    recognizer.onstart = () => console.log("🎤 Listening for coordinate…");
+    // 2) use any for the event
+    recognizer.onresult = (evt: any) => {
+      const text = evt.results[0][0].transcript
+                    .trim()
+                    .toUpperCase()
+                    .replace(/\s+/g, "");
+      console.log("Heard:", text);
+      const m = text.match(/^([A-J])([1-9]|10)$/);
+      if (!m) {
+        return alert("Sorry, I didn’t catch a valid cell (e.g. B7). Try again.");
       }
-      const coord = coords[0].replace(/\s+/, "");
-      const row = "ABCDEFGHIJ".indexOf(coord[0]);
-      const col = parseInt(coord.slice(1), 10) - 1;
-      handleHumanClick(row, col);
+      const col = "ABCDEFGHIJ".indexOf(m[1]);
+      const row = parseInt(m[2], 10) - 1;
+      handleHumanClick(col, row);
+    };
+    recognizer.onerror = (e: any) => {
+      console.error("Speech error", e);
+      alert("Sorry, couldn’t understand you. Please try again.");
+    };
   
-    } catch (e: any) {
-      alert('Voice attack failed: ' + e.message);
-    }
-  };
+    recognizer.start();
+  };
   
 
   
@@ -629,7 +623,7 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
   if (!gameStarted) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
-        <div className="relative w-full max-w-md aspect-video bg-gray-900 rounded-lg overflow-hidden shadow-inner border-2 border-gray-700">
+        <div className="relative w-full max-w-md  bg-gray-900 rounded-lg overflow-hidden shadow-inner border-2 border-gray-700">
           <div className="absolute inset-0 pointer-events-none z-10">
             <div className="w-full h-full grid grid-cols-3 grid-rows-3">
               {[...Array(9)].map((_, i) => (
@@ -639,7 +633,11 @@ const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
             <div className="absolute inset-0 border-2 border-blue-500 border-opacity-50"></div>
           </div>
           {cameraImage ? (
-            <img src={cameraImage} className="w-full h-full object-cover" />
+            <img
+            src={cameraImage}
+            className="w-full h-full object-cover transform scale-x-[-1]"
+            style={{ aspectRatio: 'auto' }} // Override aspect ratio for full height
+          />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-400">
               Position your physical board in view
