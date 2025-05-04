@@ -53,8 +53,14 @@ export function generateBoard(hard: boolean = false): (number | string)[][] {
     });
   } else {
     // For normal (non-hard) mode, ships are just numbers.
-    const ships: number[] = [5, 4, 3, 3, 2];
-    ships.forEach((shipLength) => {
+    const ships: { length: number; id: number }[] = [
+      { length: 5, id: 6 },
+      { length: 4, id: 5 },
+      { length: 3, id: 4 },
+      { length: 3, id: 3 },
+      { length: 2, id: 2 },
+    ];
+    ships.forEach(({ length, id }) => {
       let placed = false;
       while (!placed) {
         const orientation = Math.random() > 0.5 ? "horizontal" : "vertical";
@@ -62,24 +68,24 @@ export function generateBoard(hard: boolean = false): (number | string)[][] {
         const y = Math.floor(Math.random() * GRID_SIZE);
         let canPlace = true;
         if (orientation === "horizontal") {
-          if (x + shipLength > GRID_SIZE) canPlace = false;
+          if (x + length > GRID_SIZE) canPlace = false;
           else {
-            for (let i = 0; i < shipLength; i++) {
+            for (let i = 0; i < length; i++) {
               if (board[y][x + i] !== 0) canPlace = false;
             }
           }
         } else {
-          if (y + shipLength > GRID_SIZE) canPlace = false;
+          if (y + length > GRID_SIZE) canPlace = false;
           else {
-            for (let i = 0; i < shipLength; i++) {
+            for (let i = 0; i < length; i++) {
               if (board[y + i][x] !== 0) canPlace = false;
             }
           }
         }
         if (canPlace) {
-          for (let i = 0; i < shipLength; i++) {
-            if (orientation === "horizontal") board[y][x + i] = 1;
-            else board[y + i][x] = 1;
+          for (let i = 0; i < length; i++) {
+            if (orientation === "horizontal") board[y][x + i] = id;
+            else board[y + i][x] = id;
           }
           placed = true;
         }
