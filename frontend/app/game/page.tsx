@@ -5,8 +5,6 @@ import { botTurn as easyBotTurn } from "../../actions/functions";
 import { generateProbabilitiesForAllShips, generateNextMove } from "../../actions/probability";
 import { createMatrix } from "../../actions/helpers";
 import { updateLEDsAfterTurn, updateLEDsListening, updateLEDsVictory, updateLEDsDefeat } from '../../actions/connectionTCP';
-import { createModel, KaldiRecognizer } from "vosk-browser";
-import { recordAudio, blobToDataURL } from '../../utils/audio'
 
 // Remove any previous conflicting declarations
 declare global {
@@ -53,9 +51,8 @@ const GamePage = () => {
   // For probability strategies (medium and hard)
   const [boardProbHits, setBoardProbHits] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
   const [boardProbMisses, setBoardProbMisses] = useState<number[][]>(createMatrix(GRID_SIZE, GRID_SIZE, 0));
-// Hold the Vosk recognizer
-//const [voskRec, setVoskRec] = useState<KaldiRecognizer | null>(null);
-  // Speech recognition setup - keeping original implementation
+  const [boardError, setBoardError] = useState(false);
+
   let recognizer: any = null;
   if (typeof window !== "undefined") {
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -67,6 +64,9 @@ const GamePage = () => {
     }
   }
 
+  function countShipTiles(board: (number|string)[][]) {
+    return board.flat().filter(cell => cell !== 0).length;
+  }
 
   // Function to generate board with memoization for performance
   const generateInitialBoard = useCallback((difficultyLevel: "easy" | "medium" | "hard") => {
@@ -85,17 +85,28 @@ const GamePage = () => {
 
       // Process the captured image or fall back to random board
       
-     /* if (cameraImage) {
+      if (cameraImage) {
         processCapturedImage(cameraImage)
           .then((matrix) => {
             if (!isMounted) return;
             if (Array.isArray(matrix)) {
               setHumanBoard(matrix);
               console.log("Processed Human Board:", matrix);
+              console.log("The countShip of matrix is:", countShipTiles(matrix))
+              if (countShipTiles(matrix) !== TOTAL_SHIP_SQUARES) {
+                setBoardError(true);
+              } else {
+                setBoardError(false);
+              }
             } else { 
               // Fallback if processing fails
               const human = generateInitialBoard(difficulty);
               setHumanBoard(human);
+              if (countShipTiles(human) !== TOTAL_SHIP_SQUARES) {
+                setBoardError(true);
+              } else {
+                setBoardError(false);
+              }
               console.log("Fallback Generated Human Board:", human);
            }
           })
@@ -104,14 +115,19 @@ const GamePage = () => {
             console.error("Error processing image:", err);
             const human = generateInitialBoard(difficulty);
             setHumanBoard(human);
+            if (countShipTiles(human) !== TOTAL_SHIP_SQUARES) {
+              setBoardError(true);
+            } else {
+              setBoardError(false);
+            }
             console.log("Fallback Generated Human Board:", human);
           });
-      } else {  */
+      } else {  
         // If no image, fall back to generated board
         const human = generateInitialBoard(difficulty);
         setHumanBoard(human);
         console.log("Generated Human Board:", human);
-     // }
+      }
 
       // Reset displayed grid and game state
       setBotGrid(Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill("blue")));
@@ -616,7 +632,41 @@ const GamePage = () => {
   };
   
 
-  
+if (boardError) {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-white p-8 space-y-4 z-50">
+      <h2 className="text-2xl font-bold text-red-600">Oops!</h2>
+      <p className="text-center">
+        Something went wrong translating your photo into a board.  
+        We recommend you refresh and try again, or use a randomly generated board.
+      </p>
+      <div className="flex gap-4">
+        <button
+          className="btn btn-warning"
+          onClick={() => {
+            // “Retake photo” → reset everything to start
+            setBoardError(false);
+            resetGame();
+          }}
+        >
+          Retake Photo
+        </button>
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            // use random fallback
+            const fallback = generateInitialBoard(difficulty!);
+            setHumanBoard(fallback);
+            setBoardError(false);
+          }}
+        >
+          Use Random Board
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
   // Start Game Section: Capture Image / Test Mode
   if (!gameStarted) {
