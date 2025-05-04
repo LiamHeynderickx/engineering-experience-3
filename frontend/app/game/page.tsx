@@ -416,7 +416,7 @@ const GamePage = () => {
         if (currentHumanAttacked.has(key)) {
           console.log(`Cell ${key} already attacked by bot, retrying...`);
           // Retry with the SAME latestHumanAttacked state
-          setTimeout(() => botTurn(currentBotAttacked, latestHumanAttacked), 50);
+         // setTimeout(() => botTurn(currentBotAttacked, latestHumanAttacked), 50);
           return;
         }
 
@@ -430,7 +430,8 @@ const GamePage = () => {
           hitShip = true;
           console.log(`${difficulty} bot hit at ${key}`, targetValue);
 
-          if (difficulty === "hard") {
+          if (difficulty === "hard") { 
+            console.log("Easter egg, I have no clue how you got here though.")/*
             // Hard mode: reveal entire boat
             const boatId = targetValue;
             let addedHits = 0;
@@ -473,7 +474,7 @@ const GamePage = () => {
 
               return newHits;
             });
-          } else {
+        */  } else {
             // Medium mode: single hit
             const newProbHits = [...boardProbHits.map(row => [...row])];
             newProbHits[nextMove.row][nextMove.col] = 1;
@@ -488,18 +489,21 @@ const GamePage = () => {
 
             // now update the hit count *and* schedule the next turn *only once*
             setBotHits(prev => {
-              const newHits = prev + 1
+              const newHits = prev + 1;
               if (newHits >= TOTAL_SHIP_SQUARES) {
-                setGameOver(true)
-                setWinner("bot")
-              } else {
-                // **only** place we schedule the next botTurn
-                setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000)
-                console.log("Recursive called, botHits are now:", newHits, " while old hits are ", prev)
-
-              }
-              return newHits
+                // game over
+                setGameOver(true);
+                setWinner("bot");
+              } 
+              return newHits;
             });
+
+            if (hitShip && !gameOver) {
+              console.log("Easy bot hit a ship, going again after delay");
+              // Pass the LATEST botAttacked and the UPDATED humanAttacked set (easyAttackedSet)
+              setTimeout(() => botTurn(currentBotAttacked, currentHumanAttacked), 1000);
+            }
+
 
             // REMOVE THIS SECTION - we already scheduled the next turn in the setBotHits callback
             // Don't schedule another turn here outside the state update callback
@@ -529,11 +533,6 @@ const GamePage = () => {
 
         // IMPORTANT: We've moved the recursive calls into state update callbacks
         // Additionally, added a safety timeout to prevent infinite loops
-        if (hitShip && !gameOver) {
-          // Since we've already scheduled the next turn inside the state update callbacks,
-          // we don't need any additional scheduling here
-          console.log("Bot hit handling is delegated to state update callbacks");
-        }
       } catch (error) {
         console.error("Error in bot turn:", error);
         setIsHumanTurn(true); // Safety fallback
